@@ -1,27 +1,36 @@
 import os
+
 from decouple import config
 
-BASE_DIR = os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
-SECRET_KEY = config('SECRET_KEY')
+# NOTE:
+# The project expects a SECRET_KEY to be provided via environment (.env) in real deployments.
+# A development-safe fallback is provided so basic commands like `manage.py check`
+# can run in minimal/CI environments without a configured .env.
+SECRET_KEY = config("SECRET_KEY", default="insecure-dev-secret-key-change-me")
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-
-    'django.contrib.sites',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'crispy_forms',
-    'django_countries',
-
-    'core'
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",
+    # allauth
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    # crispy
+    "crispy_forms",
+    "crispy_bootstrap4",
+    # address/country field
+    "django_countries",
+    # local app
+    "core",
 ]
 
 MIDDLEWARE = [
@@ -71,12 +80,20 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media_root')
 # Auth
 
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend'
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 )
+
 SITE_ID = 1
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = "/"
 
-# CRISPY FORMS
+# django-allauth (modern versions require explicit config)
+ACCOUNT_AUTHENTICATION_METHOD = "username_email"
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = True
+ACCOUNT_EMAIL_VERIFICATION = "optional"
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 
-CRISPY_TEMPLATE_PACK = 'bootstrap4'
+# CRISPY FORMS (django-crispy-forms 2.x)
+CRISPY_ALLOWED_TEMPLATE_PACKS = ("bootstrap4",)
+CRISPY_TEMPLATE_PACK = "bootstrap4"
