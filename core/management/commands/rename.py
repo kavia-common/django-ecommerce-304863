@@ -45,4 +45,6 @@ class Command(BaseCommand):
 
         os.rename(current_project_name, new_project_name)
 
-        self.stdout.write(self.style.SUCCESS("Project has been renamed to %s" % new_project_name))
+        self.stdout.write(
+            self.style.SUCCESS("Project has been renamed to %s" % new_project_name)
+        )

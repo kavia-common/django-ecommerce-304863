@@ -27,7 +27,7 @@ DEBUG_TOOLBAR_PANELS = [
 ]
 
 
-def show_toolbar(request):
+def show_toolbar(_request):
     return True
 
 

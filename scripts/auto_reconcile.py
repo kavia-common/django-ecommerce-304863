@@ -29,7 +29,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 import time
 from dataclasses import dataclass
@@ -133,7 +132,9 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _run_cmd(args: Sequence[str], cwd: Optional[Path] = None, timeout_s: int = 30) -> Tuple[int, str, str]:
+def _run_cmd(
+    args: Sequence[str], cwd: Optional[Path] = None, timeout_s: int = 30
+) -> Tuple[int, str, str]:
     """Run a command and return (returncode, stdout, stderr)."""
     p = subprocess.run(
         list(args),
@@ -164,7 +165,9 @@ def _atomic_write_bytes(path: Path, content: bytes) -> None:
     This ensures readers never see a partially-written file.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode="wb", delete=False, dir=str(path.parent), prefix=f".{path.name}.tmp.") as tf:
+    with tempfile.NamedTemporaryFile(
+        mode="wb", delete=False, dir=str(path.parent), prefix=f".{path.name}.tmp."
+    ) as tf:
         tmp_name = tf.name
         tf.write(content)
         tf.flush()
@@ -188,7 +191,9 @@ def _write_text_if_changed(path: Path, content: str, *, dry_run: bool) -> WriteR
         old_bytes = path.read_bytes()
         old_sha = _sha256_bytes(old_bytes)
         if old_sha == new_sha:
-            return WriteResult(path=path, changed=False, old_sha256=old_sha, new_sha256=new_sha)
+            return WriteResult(
+                path=path, changed=False, old_sha256=old_sha, new_sha256=new_sha
+            )
     else:
         old_sha = None
 
@@ -244,7 +249,9 @@ def _get_flasky_remote_head(config: Config, logger: Logger) -> Optional[str]:
             return None
 
         last_err = err or out
-        logger.warn(f"unable to query Flasky remote refs (attempt {attempt}): {last_err}")
+        logger.warn(
+            f"unable to query Flasky remote refs (attempt {attempt}): {last_err}"
+        )
         # brief backoff, but keep small to preserve prior behavior (fast loop)
         if attempt < config.git_ls_remote_retries + 1:
             time.sleep(min(1.0 * attempt, 3.0))
@@ -280,7 +287,9 @@ def _regenerate_env_example(env_example_text: str) -> str:
 class StateStore:
     """Loads/saves schema-versioned state in `.autogen/state.json` with basic migration."""
 
-    def __init__(self, state_path: Path, repo_root: Path, logger: Logger, *, dry_run: bool) -> None:
+    def __init__(
+        self, state_path: Path, repo_root: Path, logger: Logger, *, dry_run: bool
+    ) -> None:
         self._state_path = state_path
         self._repo_root = repo_root
         self._logger = logger
@@ -295,11 +304,15 @@ class StateStore:
             raw = json.loads(_read_text(self._state_path))
         except Exception:
             # Preserve prior behavior: don't fail reconciliation due to corrupted state.
-            self._logger.warn("state.json is corrupted/unreadable; will be overwritten on next save")
+            self._logger.warn(
+                "state.json is corrupted/unreadable; will be overwritten on next save"
+            )
             return {"_corrupted": True, "schema_version": STATE_SCHEMA_VERSION}
 
         if not isinstance(raw, dict):
-            self._logger.warn("state.json is not an object; will be overwritten on next save")
+            self._logger.warn(
+                "state.json is not an object; will be overwritten on next save"
+            )
             return {"_corrupted": True, "schema_version": STATE_SCHEMA_VERSION}
 
         migrated = self._migrate_if_needed(raw)
@@ -343,7 +356,9 @@ class StateStore:
             return state
 
         # Unknown/unsupported older schema: mark, but keep contents.
-        self._logger.warn(f"state.json schema_version={version!r} is unsupported; continuing best-effort")
+        self._logger.warn(
+            f"state.json schema_version={version!r} is unsupported; continuing best-effort"
+        )
         migrated = dict(state)
         migrated["schema_version"] = STATE_SCHEMA_VERSION
         migrated["_migrated_from"] = version
@@ -356,7 +371,9 @@ class Reconciler:
     def __init__(self, config: Config, logger: Logger) -> None:
         self._config = config
         self._logger = logger
-        self._state_store = StateStore(config.state_path, config.repo_root, logger, dry_run=config.dry_run)
+        self._state_store = StateStore(
+            config.state_path, config.repo_root, logger, dry_run=config.dry_run
+        )
 
     def run_once(self) -> int:
         """
@@ -412,7 +429,9 @@ class Reconciler:
 
         # Docker/compose manifests (regenerate only if present; we do not create new infra files here)
         if self._config.dockerfile_path.exists():
-            self._logger.info("NOTE: Dockerfile present but regeneration is not implemented; leaving unchanged")
+            self._logger.info(
+                "NOTE: Dockerfile present but regeneration is not implemented; leaving unchanged"
+            )
         for p in self._config.compose_candidates:
             if p.exists():
                 self._logger.info(
@@ -462,11 +481,17 @@ class Reconciler:
         for w in writes:
             if w.changed:
                 if self._config.dry_run:
-                    self._logger.info(f"DRY-RUN: would update {w.path.relative_to(self._config.repo_root)}")
+                    self._logger.info(
+                        f"DRY-RUN: would update {w.path.relative_to(self._config.repo_root)}"
+                    )
                 else:
-                    self._logger.info(f"UPDATED: {w.path.relative_to(self._config.repo_root)}")
+                    self._logger.info(
+                        f"UPDATED: {w.path.relative_to(self._config.repo_root)}"
+                    )
             else:
-                self._logger.info(f"OK(no change): {w.path.relative_to(self._config.repo_root)}")
+                self._logger.info(
+                    f"OK(no change): {w.path.relative_to(self._config.repo_root)}"
+                )
 
         self._logger.info(
             f"Cycle complete: changed_count={change_summary['changed_count']}, "
@@ -512,7 +537,9 @@ def run_loop(interval_seconds: int = 300) -> int:
     """
     # Preserve prior guardrail.
     if interval_seconds < 5:
-        Logger(verbose=False).error("Refusing to run with interval_seconds < 5 (too tight).")
+        Logger(verbose=False).error(
+            "Refusing to run with interval_seconds < 5 (too tight)."
+        )
         return 2
 
     config = Config(interval_seconds=interval_seconds)
@@ -538,7 +565,9 @@ def run_loop(interval_seconds: int = 300) -> int:
 
 
 def _cmd_status(config: Config, logger: Logger) -> int:
-    state_store = StateStore(config.state_path, config.repo_root, logger, dry_run=config.dry_run)
+    state_store = StateStore(
+        config.state_path, config.repo_root, logger, dry_run=config.dry_run
+    )
     state = state_store.load()
     if not state:
         print("No state found. Run `python scripts/auto_reconcile.py run` first.")
@@ -560,15 +589,28 @@ def main(argv: Optional[List[str]] = None) -> int:
       --dry-run     Preview changes without writing files.
       --verbose     More detailed logs.
     """
-    parser = argparse.ArgumentParser(description="Auto-reconcile Django repo with Flasky metadata every 5 minutes.")
-    parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing any files.")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose debug logging.")
+    parser = argparse.ArgumentParser(
+        description="Auto-reconcile Django repo with Flasky metadata every 5 minutes."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview changes without writing any files.",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="Enable verbose debug logging."
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("run", help="Run a single reconcile cycle.")
 
     p_loop = sub.add_parser("loop", help="Run reconcile cycles forever.")
-    p_loop.add_argument("--interval-seconds", type=int, default=300, help="Sleep interval between cycles (default: 300).")
+    p_loop.add_argument(
+        "--interval-seconds",
+        type=int,
+        default=300,
+        help="Sleep interval between cycles (default: 300).",
+    )
 
     sub.add_parser("status", help="Print the last saved state.json.")
 

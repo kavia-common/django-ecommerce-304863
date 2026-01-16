@@ -2,10 +2,19 @@
 
 from django.contrib import admin
 
-from .models import Address, Coupon, Item, Order, OrderItem, Payment, Refund, UserProfile
+from .models import (
+    Address,
+    Coupon,
+    Item,
+    Order,
+    OrderItem,
+    Payment,
+    Refund,
+    UserProfile,
+)
 
 
-def make_refund_accepted(modeladmin, request, queryset):
+def make_refund_accepted(_modeladmin, _request, queryset):
     queryset.update(refund_requested=False, refund_granted=True)
 
 

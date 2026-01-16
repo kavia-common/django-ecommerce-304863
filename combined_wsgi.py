@@ -143,10 +143,12 @@ django_app = get_wsgi_application()
 
 try:
     flasky_app = _load_flasky_wsgi()
-except Exception as exc:
+except Exception as exc:  # pylint: disable=broad-exception-caught
     # Keep the combined container healthy even if Flasky deps/env are missing.
     flasky_app = _make_placeholder_flask_app(exc)
 
 # Mount Flasky under /flask; Django remains the default at /
 # We wrap Flasky with a healthcheck responder to allow smoke tests without requiring Flasky DB.
-application = DispatcherMiddleware(django_app, {"/flask": _flask_mount_with_healthcheck(flasky_app)})
+application = DispatcherMiddleware(
+    django_app, {"/flask": _flask_mount_with_healthcheck(flasky_app)}
+)
