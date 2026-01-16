@@ -18,6 +18,9 @@ certifi==2025.1.31
 idna==3.10
 urllib3==2.3.0
 
+# WSGI server for unified single-port deployment (Django + Flask mounted at /flask)
+gunicorn==23.0.0
+
 # Dev tooling (optional, but kept for parity with prior repo intent)
 django-debug-toolbar==6.1.0
 autopep8==2.3.2
