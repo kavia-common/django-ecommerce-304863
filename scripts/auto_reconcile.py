@@ -415,7 +415,9 @@ class Reconciler:
             self._logger.info("NOTE: Dockerfile present but regeneration is not implemented; leaving unchanged")
         for p in self._config.compose_candidates:
             if p.exists():
-                self._logger.info(f"NOTE: compose file present ({p.name}) but regeneration is not implemented; leaving unchanged")
+                self._logger.info(
+                    f"NOTE: compose file present ({p.name}) but regeneration is not implemented; leaving unchanged"
+                )
 
         change_summary = _compute_change_summary(self._config.repo_root, writes)
 
