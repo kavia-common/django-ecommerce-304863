@@ -90,6 +90,16 @@ From the `django-ecommerce-304863/` directory:
 python scripts/auto_reconcile.py run
 ```
 
+Optional flags:
+- `--dry-run` to preview changes without writing files
+- `--verbose` for more detailed logs
+
+Example:
+
+```
+python scripts/auto_reconcile.py --dry-run --verbose run
+```
+
 ### Run continuously (loop)
 
 ```
