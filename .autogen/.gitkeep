@@ -1,0 +1,2 @@
+# This directory is used by scripts/auto_reconcile.py to persist state.json.
+# It is intentionally kept small and human-readable.

@@ -75,6 +75,41 @@ python manage.py runserver
 
 ---
 
+## Auto-reconcile loop (every 5 minutes)
+
+This repository includes an optional, preview-safe auto-reconcile script that can run a cron-like loop every 5 minutes. It is designed to:
+- analyze this local Django repo plus the remote Flasky repo metadata (without cloning/vendoring Flasky),
+- regenerate selected manifests (currently `requirements.txt` and `.env.example` are normalized/idempotently rewritten),
+- write a small state file at `.autogen/state.json` including the last run timestamp, Flasky commit ref used, and a summary of file changes.
+
+### Run once (on-demand)
+
+From the `django-ecommerce-304863/` directory:
+
+```
+python scripts/auto_reconcile.py run
+```
+
+### Run continuously (loop)
+
+```
+python scripts/auto_reconcile.py loop --interval-seconds 300
+```
+
+Stop it with Ctrl+C.
+
+### Disable
+
+Simply do not run the script (there is no background daemon). The loop only runs when explicitly started.
+
+### Inspect last run
+
+```
+python scripts/auto_reconcile.py status
+```
+
+---
+
 ## Follow the tutorial
 
 This project is part of a [series on YouTube](https://youtu.be/z4USlooVXG0) that teaches how to build an e-commerce website with Django.
