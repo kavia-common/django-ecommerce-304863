@@ -1,0 +1,36 @@
+{
+  "manifest_version": 1,
+  "repo": {
+    "name": "django-ecommerce-304863",
+    "type": "django",
+    "root_relative": "django-ecommerce-304863"
+  },
+  "runtime": {
+    "preferred_port": 8000,
+    "entrypoint": {
+      "kind": "gunicorn",
+      "module": "combined_wsgi:application",
+      "description": "Unified Gunicorn entrypoint serving Django at / and Flasky at /flask via combined_wsgi.py."
+    },
+    "routes": [
+      {
+        "mount": "/",
+        "app": "django",
+        "note": "Primary site routes served by Django."
+      }
+    ],
+    "env": {
+      "DJANGO_SETTINGS_MODULE": {
+        "value": "djecommerce.settings.development",
+        "description": "Default settings module for Django when not overridden."
+      },
+      "PORT": {
+        "value": "8000",
+        "description": "Unified runtime port (fixed)."
+      }
+    }
+  },
+  "assets": {
+    "deployment_asset_manifest_path": "assets/deployment/asset_manifest.json"
+  }
+}

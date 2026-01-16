@@ -1,0 +1,28 @@
+{
+  "manifest_version": 1,
+  "repo": {
+    "name": "flasky-304863",
+    "type": "flask",
+    "root_relative": "../flasky-304863",
+    "expected_location_note": "Expected as a sibling directory to django-ecommerce-304863 at monorepo root: <root>/flasky-304863"
+  },
+  "runtime": {
+    "routes": [
+      {
+        "mount": "/flask",
+        "app": "flasky",
+        "note": "Flask app mounted under /flask by combined_wsgi.py."
+      }
+    ],
+    "env": {
+      "FLASK_CONFIG": {
+        "value": "default",
+        "description": "Flasky app factory config name (used by app.create_app)."
+      },
+      "FLASKY__MOUNT_PATH": {
+        "value": "/flask",
+        "description": "Namespaced metadata for mount path; not consumed by Flask by default."
+      }
+    }
+  }
+}
