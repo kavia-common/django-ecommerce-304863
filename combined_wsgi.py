@@ -10,6 +10,12 @@ Notes:
     <monorepo-root>/flasky-304863
 - This module intentionally adjusts sys.path so that `import app` resolves to
   Flasky's package (flasky-304863/app), not this Django project's `core` etc.
+
+Operational note for smoke tests:
+- Flasky may require its own DB migrations/seed data. To allow basic validation
+  of the unified runtime even when Flasky isn't initialized, this module
+  provides a lightweight health endpoint at /flask and /flask/health that
+  returns 200 without touching Flasky's DB.
 """
 from __future__ import annotations
 
@@ -19,11 +25,12 @@ import sys
 from pathlib import Path
 
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.wrappers import Response
+from werkzeug.wrappers import Request, Response
 
 
 def _make_placeholder_flask_app(error: Exception):
     """Create a tiny WSGI app that returns a helpful error message."""
+
     def app(environ, start_response):
         resp = Response(
             f"Flasky app unavailable: {type(error).__name__}: {error}\n",
@@ -95,6 +102,33 @@ def _load_flasky_wsgi():
     return flasky_app_module.create_app(config_name)
 
 
+def _flask_mount_with_healthcheck(flask_app):
+    """
+    Create a small WSGI mount app for /flask that provides:
+
+    - /flask and /flask/health -> 200 OK (text/plain)
+    - all other paths -> delegated to Flasky
+
+    This keeps unified runtime smoke tests stable even when Flasky's DB isn't ready.
+    """
+
+    def mount_app(environ, start_response):
+        req = Request(environ)
+        # At this mount point, PATH_INFO is relative to "/flask".
+        # Examples:
+        #   GET /flask          -> req.path == "/"
+        #   GET /flask/         -> req.path == "/"
+        #   GET /flask/health   -> req.path == "/health"
+        #   GET /flask/foo      -> req.path == "/foo"
+        if req.path in ("/", "/health"):
+            resp = Response("ok\n", status=200, mimetype="text/plain")
+            return resp(environ, start_response)
+
+        return flask_app(environ, start_response)
+
+    return mount_app
+
+
 # Django settings: prefer explicit DJANGO_SETTINGS_MODULE, but keep existing behavior
 # consistent with manage.py defaults by falling back to development settings.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "djecommerce.settings.development")
@@ -111,4 +145,5 @@ except Exception as exc:
     flasky_app = _make_placeholder_flask_app(exc)
 
 # Mount Flasky under /flask; Django remains the default at /
-application = DispatcherMiddleware(django_app, {"/flask": flasky_app})
+# We wrap Flasky with a healthcheck responder to allow smoke tests without requiring Flasky DB.
+application = DispatcherMiddleware(django_app, {"/flask": _flask_mount_with_healthcheck(flasky_app)})
