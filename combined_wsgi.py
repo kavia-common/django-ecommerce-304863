@@ -4,14 +4,20 @@ Combined WSGI entrypoint that serves:
 - Flasky (Flask app) at /flask
 
 This is intended to be run behind a single Gunicorn instance, exposing one port.
+
+Notes:
+- Flasky is expected to live in a sibling directory to this container:
+    <monorepo-root>/flasky-304863
+- This module intentionally adjusts sys.path so that `import app` resolves to
+  Flasky's package (flasky-304863/app), not this Django project's `core` etc.
 """
 from __future__ import annotations
 
+import importlib
 import os
 import sys
-from typing import Optional
+from pathlib import Path
 
-from django.core.wsgi import get_wsgi_application
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers import Response
 
@@ -29,28 +35,72 @@ def _make_placeholder_flask_app(error: Exception):
     return app
 
 
+def _ensure_flasky_on_sys_path() -> Path:
+    """
+    Ensure Flasky's repo directory is importable by adding it to sys.path.
+
+    Returns:
+        Path to the Flasky repo root directory.
+
+    Raises:
+        FileNotFoundError: If the expected Flasky repo directory does not exist.
+    """
+    # combined_wsgi.py lives at: <monorepo-root>/django-ecommerce-304863/combined_wsgi.py
+    # Flasky expected at:       <monorepo-root>/flasky-304863
+    container_dir = Path(__file__).resolve().parent
+    monorepo_root = container_dir.parent
+    flasky_repo_dir = monorepo_root / "flasky-304863"
+
+    if not flasky_repo_dir.exists():
+        raise FileNotFoundError(
+            f"Expected Flasky repo at '{flasky_repo_dir}', but it was not found. "
+            "Ensure 'flasky-304863' exists as a sibling directory to this container."
+        )
+
+    # Add monorepo root (helps some import resolvers/pylint) and Flasky repo dir.
+    # Flasky repo dir is the critical one: it contains the 'app' package.
+    for p in (str(monorepo_root), str(flasky_repo_dir)):
+        if p not in sys.path:
+            sys.path.insert(0, p)
+
+    return flasky_repo_dir
+
+
 def _load_flasky_wsgi():
     """
     Load Flasky as a WSGI app.
 
-    We do NOT vendor/copy Flasky into this project; instead we import it from a
-    sibling directory `../flasky-304863` (present in this monorepo workspace).
+    Flasky uses an app factory in app/__init__.py (create_app).
+    Config is chosen via FLASK_CONFIG (defaults to 'default').
     """
-    flasky_repo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "flasky-304863"))
-    if flasky_repo_dir not in sys.path:
-        sys.path.insert(0, flasky_repo_dir)
+    _ensure_flasky_on_sys_path()
 
-    # Flasky uses an app factory in app/__init__.py and typically config via FLASK_CONFIG.
-    # Default config is 'default' per flasky config.py.
-    from app import create_app  # type: ignore
+    # Import via importlib so we can provide clearer errors if resolution fails.
+    try:
+        flasky_app_module = importlib.import_module("app")
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "Could not import Flasky package 'app'. "
+            "Expected it to be available from sibling repo 'flasky-304863/app'. "
+            "Verify directory structure and that sys.path includes flasky-304863."
+        ) from e
+
+    if not hasattr(flasky_app_module, "create_app"):
+        raise AttributeError(
+            "Flasky module 'app' does not expose create_app(). "
+            "Expected an app factory function 'create_app' in flasky-304863/app/__init__.py."
+        )
 
     config_name = os.environ.get("FLASK_CONFIG", "default")
-    return create_app(config_name)
+    return flasky_app_module.create_app(config_name)
 
 
 # Django settings: prefer explicit DJANGO_SETTINGS_MODULE, but keep existing behavior
 # consistent with manage.py defaults by falling back to development settings.
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "djecommerce.settings.development")
+
+# Import Django only after DJANGO_SETTINGS_MODULE is set.
+from django.core.wsgi import get_wsgi_application  # noqa: E402  (import after env var)
 
 django_app = get_wsgi_application()
 
