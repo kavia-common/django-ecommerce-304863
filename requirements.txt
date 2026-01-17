@@ -1,10 +1,18 @@
 # Runtime dependencies (Django e-commerce)
+#
+# Policy: prefer security/bugfix updates and avoid risky major version jumps unless clearly compatible.
+# Python runtime (observed): 3.12.x
+
 Django==5.2.10
 django-allauth==65.13.1
 django-countries==8.2.0
 django-crispy-forms==2.5
 crispy-bootstrap4==2025.6
+
+# Payments
 stripe==14.1.0
+
+# Configuration / assets
 python-decouple==3.8
 Pillow==12.1.0
 
@@ -21,7 +29,8 @@ urllib3==2.3.0
 # WSGI server for unified single-port deployment (Django + Flask mounted at /flask)
 gunicorn==23.0.0
 
-# Dev tooling (optional, but kept for parity with prior repo intent)
+# Dev tooling (kept here because the repo currently pins them in requirements.txt)
+# NOTE: Consider moving these to a separate dev requirements file in a follow-up.
 django-debug-toolbar==6.1.0
 autopep8==2.3.2
 pycodestyle==2.14.0
@@ -34,6 +43,7 @@ pytz==2024.1
 # Flasky (mounted at /flask in the unified combined_wsgi runtime)
 #
 # This Flasky codebase is legacy and expects Flask 2.x + Flask-SQLAlchemy 2.x + SQLAlchemy 1.x.
+# Keep these constraints to avoid breaking the legacy runtime.
 ############################
 Flask<3
 Flask-SQLAlchemy<3
