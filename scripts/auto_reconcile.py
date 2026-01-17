@@ -35,7 +35,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-
 FLASKY_REMOTE_URL = "https://github.com/miguelgrinberg/flasky"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

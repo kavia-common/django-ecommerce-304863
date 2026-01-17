@@ -135,9 +135,7 @@ def _flask_mount_with_healthcheck(flask_app):
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "djecommerce.settings.development")
 
 # Import Django only after DJANGO_SETTINGS_MODULE is set.
-from django.core.wsgi import (  # noqa: E402  (import after env var)
-    get_wsgi_application,
-)
+from django.core.wsgi import get_wsgi_application  # noqa: E402  (import after env var)
 
 django_app = get_wsgi_application()
 

@@ -80,7 +80,10 @@ def ensure_venv_and_deps() -> None:
 
     _log("[deploy] installing deps from requirements.txt")
     _run([str(python_exe), "-m", "pip", "install", "--upgrade", "pip"], cwd=REPO_ROOT)
-    _run([str(python_exe), "-m", "pip", "install", "-r", "requirements.txt"], cwd=REPO_ROOT)
+    _run(
+        [str(python_exe), "-m", "pip", "install", "-r", "requirements.txt"],
+        cwd=REPO_ROOT,
+    )
 
 
 def _django_manage(args: Sequence[str]) -> None:
@@ -149,7 +152,11 @@ def _discover_gunicorn_pid() -> Optional[int]:
                 return int(txt)
 
     try:
-        res = _run(["pgrep", "-f", "gunicorn combined_wsgi:application"], cwd=REPO_ROOT, check=False)
+        res = _run(
+            ["pgrep", "-f", "gunicorn combined_wsgi:application"],
+            cwd=REPO_ROOT,
+            check=False,
+        )
         if res.returncode == 0 and res.stdout.strip():
             first = res.stdout.splitlines()[0].strip()
             if first.isdigit():
@@ -172,7 +179,9 @@ def graceful_reload() -> None:
     except ProcessLookupError:
         _log("[deploy] WARN: PID not found; skipping reload")
     except PermissionError as e:
-        raise DeployError(f"Permission denied sending SIGHUP to pid {pid}: {e!r}") from e
+        raise DeployError(
+            f"Permission denied sending SIGHUP to pid {pid}: {e!r}"
+        ) from e
 
 
 # PUBLIC_INTERFACE

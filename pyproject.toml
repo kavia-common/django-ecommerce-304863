@@ -1,0 +1,39 @@
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+extend-exclude = """
+/(
+  migrations
+  | static_in_env
+  | templates
+  | db\\.sqlite3
+)/
+"""
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["core", "djecommerce", "runtime", "scripts"]
+skip = ["db.sqlite3"]
+extend_skip_glob = [
+  "*/migrations/*.py",
+  "static_in_env/*",
+  "templates/*",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [
+  "db.sqlite3",
+  "static_in_env",
+  "templates",
+  "**/migrations/**",
+]
+
+[tool.ruff.lint]
+# Keep this conservative: formatting is handled by Black, imports by isort.
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+  "E501", # line length is handled by Black formatting choices
+]

@@ -119,8 +119,14 @@ def combine_manifests(
     combined: Dict[str, Any] = {
         "manifest_version": 1,
         "combined_from": [
-            {"path": str(dj_path), "repo": django.get("repo", {}).get("name", "django")},
-            {"path": str(fl_path), "repo": flasky.get("repo", {}).get("name", "flasky")},
+            {
+                "path": str(dj_path),
+                "repo": django.get("repo", {}).get("name", "django"),
+            },
+            {
+                "path": str(fl_path),
+                "repo": flasky.get("repo", {}).get("name", "flasky"),
+            },
         ],
         "effective": _merge(django, flasky),
     }
