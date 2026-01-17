@@ -81,6 +81,117 @@ python manage.py runserver
 
 ---
 
+## Production Setup
+
+This project includes hardened production settings at `djecommerce/settings/production.py`. Those settings are intentionally **fail-safe**: they will raise an error on startup rather than run insecurely or with placeholder values.
+
+### Required environment variables (production)
+
+Set these in your production environment (or via a secret manager). These are required by `production.py`:
+
+- `DEBUG` — **must be explicitly** `False`
+- `SECRET_KEY` — Django secret key (long, random, unique)
+- `ALLOWED_HOSTS` — comma-separated domains, e.g. `example.com,www.example.com`
+  - Must not be empty and must not be placeholder values like `example.com`, `yourdomain.com`, etc.
+- Database (PostgreSQL):
+  - `DB_NAME`
+  - `DB_USER`
+  - `DB_PASSWORD`
+  - `DB_HOST`
+  - `DB_PORT` (optional)
+- Stripe (live mode):
+  - `STRIPE_LIVE_PUBLIC_KEY`
+  - `STRIPE_LIVE_SECRET_KEY`
+- `SECURE_SSL_REDIRECT` (optional) — defaults to `True` in production settings. Set to `False` only if you know what you're doing (e.g., specific staging setups).
+
+### Security defaults already enabled in `production.py`
+
+The production settings already turn on common secure defaults, including:
+
+- Secure cookies / session protections:
+  - `SESSION_COOKIE_SECURE = True`
+  - `CSRF_COOKIE_SECURE = True`
+  - `SESSION_COOKIE_HTTPONLY = True`
+  - `SameSite` set to `Lax` for session/CSRF cookies
+- HTTPS enforcement & HSTS:
+  - `SECURE_SSL_REDIRECT` enabled by default
+  - HSTS enabled (`SECURE_HSTS_SECONDS`, `INCLUDE_SUBDOMAINS`, `PRELOAD`)
+- Clickjacking / content-type protections:
+  - `X_FRAME_OPTIONS = "DENY"`
+  - `SECURE_CONTENT_TYPE_NOSNIFF = True`
+- Reverse proxy HTTPS awareness:
+  - `SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")`
+  - Ensure your proxy/load balancer sets `X-Forwarded-Proto: https`
+
+### Example `.env.production` (do not commit)
+
+Create an environment file (or set these vars in your platform’s secret manager). **Never commit real production secrets to git.**
+
+```bash
+# Django
+DEBUG=False
+SECRET_KEY="django-insecure-CHANGE-ME-use-a-50+-char-random-secret"
+ALLOWED_HOSTS="shop.example.com,www.shop.example.com"
+
+# Database (PostgreSQL)
+DB_NAME="djecommerce"
+DB_USER="djecommerce_user"
+DB_PASSWORD="a-strong-db-password"
+DB_HOST="127.0.0.1"
+DB_PORT="5432"
+
+# Stripe (LIVE)
+STRIPE_LIVE_PUBLIC_KEY="pk_live_xxxxxxxxxxxxxxxxxxxxx"
+STRIPE_LIVE_SECRET_KEY="sk_live_xxxxxxxxxxxxxxxxxxxxx"
+
+# Optional override (default in production.py is True)
+SECURE_SSL_REDIRECT=True
+```
+
+### Basic deployment steps (typical)
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Export/set your production environment variables (or load them via your process manager).
+3. Collect static files:
+   ```bash
+   python manage.py collectstatic --noinput
+   ```
+4. Run migrations:
+   ```bash
+   python manage.py migrate
+   ```
+5. (Optional) Create an admin user:
+   ```bash
+   python manage.py createsuperuser
+   ```
+6. Run the app with Gunicorn (example):
+   ```bash
+   gunicorn djecommerce.wsgi:application
+   ```
+
+> Note: Your actual Gunicorn command may vary depending on your platform (systemd, Docker, Heroku-like, etc.). Ensure your environment variables are present for the running process.
+
+### Fail-fast misconfiguration warning
+
+When using `djecommerce/settings/production.py`, the app will **refuse to start** if:
+
+- `DEBUG` is not explicitly set to `False`, or
+- `ALLOWED_HOSTS` is missing/empty or contains common placeholder domains, or
+- required secrets (like `SECRET_KEY`, database variables, or Stripe live keys) are missing.
+
+This is expected and is there to prevent insecure deployments.
+
+### Stripe key management
+
+- Use your hosting provider’s **secret manager** / encrypted env vars for Stripe keys.
+- Never commit Stripe keys (live or test) into the repository.
+- Rotate keys immediately if you suspect exposure.
+
+---
+
 ## Auto-reconcile loop (every 5 minutes)
 
 This repository includes an optional, preview-safe auto-reconcile script that can run a cron-like loop every 5 minutes. It is designed to:
