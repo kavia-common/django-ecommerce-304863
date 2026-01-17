@@ -1,0 +1,16 @@
+# Development-only dependencies for this repository.
+#
+# Install after runtime deps with:
+#   pip install -r requirements.txt
+#   pip install -r requirements-dev.txt
+#
+# Keep runtime/production dependencies out of this file.
+
+# Django dev convenience
+django-debug-toolbar==6.1.0
+
+# Linting / formatting
+ruff==0.14.13
+pylint==4.0.4
+autopep8==2.3.2
+pycodestyle==2.14.0

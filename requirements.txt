@@ -1,8 +1,11 @@
-# Runtime dependencies (Django e-commerce)
+# Runtime dependencies (production) for the combined Django + legacy Flask runtime.
 #
-# Policy: prefer security/bugfix updates and avoid risky major version jumps unless clearly compatible.
-# Python runtime (observed): 3.12.x
+# Install with:
+#   pip install -r requirements.txt
+#
+# Development tooling (linters/formatters/test utilities/debug toolbar) lives in requirements-dev.txt.
 
+# Python runtime (observed): 3.12.x
 Django==5.2.10
 django-allauth==65.13.1
 django-countries==8.2.0
@@ -28,16 +31,6 @@ urllib3==2.3.0
 
 # WSGI server for unified single-port deployment (Django + Flask mounted at /flask)
 gunicorn==23.0.0
-
-# Dev tooling (kept here because the repo currently pins them in requirements.txt)
-# NOTE: Consider moving these to a separate dev requirements file in a follow-up.
-django-debug-toolbar==6.1.0
-autopep8==2.3.2
-pycodestyle==2.14.0
-ruff==0.14.13
-pylint==4.0.4
-sqlparse==0.5.5
-pytz==2024.1
 
 ############################
 # Flasky (mounted at /flask in the unified combined_wsgi runtime)

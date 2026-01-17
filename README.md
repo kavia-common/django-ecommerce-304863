@@ -53,10 +53,16 @@ That will create a new folder `env` in your project directory. Next activate it 
 source env/bin/active
 ```
 
-Then install the project dependencies with
+Then install the runtime (production) dependencies with
 
 ```
 pip install -r requirements.txt
+```
+
+If you're developing locally (linting/formatting/debug tooling), also install dev-only dependencies with
+
+```
+pip install -r requirements-dev.txt
 ```
 
 Create your environment variables by copying the example file:
