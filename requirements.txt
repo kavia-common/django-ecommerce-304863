@@ -6,14 +6,16 @@
 # Development tooling (linters/formatters/test utilities/debug toolbar) lives in requirements-dev.txt.
 
 # Python runtime (observed): 3.12.x
-Django==5.2.10
-django-allauth==65.13.1
+
+# Django (keep compatible with allauth and project templates)
+Django==6.0.1
+django-allauth==65.14.0
 django-countries==8.2.0
 django-crispy-forms==2.5
 crispy-bootstrap4==2025.6
 
 # Payments
-stripe==14.1.0
+stripe==14.2.0
 
 # Configuration / assets
 python-decouple==3.8
@@ -21,7 +23,7 @@ Pillow==12.1.0
 
 # Utilities commonly required by allauth/requests integrations
 defusedxml==0.7.1
-oauthlib==3.2.2
+oauthlib==3.3.1
 requests==2.32.3
 requests-oauthlib==2.0.0
 python3-openid==3.2.0

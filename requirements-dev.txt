@@ -7,7 +7,7 @@
 # Keep runtime/production dependencies out of this file.
 
 # Django dev convenience
-django-debug-toolbar==6.1.0
+django-debug-toolbar==6.2.0
 
 # Linting / formatting
 ruff==0.14.13
