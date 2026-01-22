@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AUTOGEN_DEPLOY_DIR = REPO_ROOT / ".autogen" / "deploy"
@@ -20,11 +20,11 @@ STATE_PATH = AUTOGEN_DEPLOY_DIR / "state.json"
 
 
 def _utc_now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # PUBLIC_INTERFACE
-def load_state() -> Dict[str, Any]:
+def load_state() -> dict[str, Any]:
     """Load staged deploy state from disk (returns {} if absent/unreadable)."""
     if not STATE_PATH.exists():
         return {}
@@ -36,7 +36,7 @@ def load_state() -> Dict[str, Any]:
 
 
 # PUBLIC_INTERFACE
-def save_state(state: Dict[str, Any]) -> None:
+def save_state(state: dict[str, Any]) -> None:
     """Persist staged deploy state to disk using a simple atomic replace."""
     AUTOGEN_DEPLOY_DIR.mkdir(parents=True, exist_ok=True)
     tmp = STATE_PATH.with_suffix(".json.tmp")
@@ -45,7 +45,7 @@ def save_state(state: Dict[str, Any]) -> None:
 
 
 # PUBLIC_INTERFACE
-def update_state(patch: Dict[str, Any]) -> Dict[str, Any]:
+def update_state(patch: dict[str, Any]) -> dict[str, Any]:
     """
     Update (merge) state dict and persist.
 

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from core.models import Coupon
 
 
 # PUBLIC_INTERFACE
-def get_coupon_by_code(*, code: str) -> Optional[Coupon]:
+def get_coupon_by_code(*, code: str) -> Coupon | None:
     """Return coupon for a code, or None if not found."""
     try:
         return Coupon.objects.get(code=code)

@@ -6,7 +6,6 @@ These helpers are designed to be unit-testable and to keep Django views thin.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -20,7 +19,7 @@ class CartResult:
 
     message: str
     redirect_name: str
-    redirect_kwargs: Optional[dict] = None
+    redirect_kwargs: dict | None = None
 
 
 # PUBLIC_INTERFACE
@@ -91,7 +90,9 @@ def remove_item_from_cart(*, user: get_user_model(), item: Item) -> CartResult:
 
 
 # PUBLIC_INTERFACE
-def remove_single_quantity_from_cart(*, user: get_user_model(), item: Item) -> CartResult:
+def remove_single_quantity_from_cart(
+    *, user: get_user_model(), item: Item
+) -> CartResult:
     """Remove a single quantity of an item from the cart (or remove the item if qty becomes 0)."""
     order_qs = Order.objects.filter(user=user, ordered=False)
     if not order_qs.exists():

@@ -20,7 +20,7 @@ import json
 import os
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 def _is_namespaced_key(key: str) -> bool:
@@ -28,9 +28,9 @@ def _is_namespaced_key(key: str) -> bool:
     return "__" in key
 
 
-def _dedupe_scalars(items: List[Any]) -> List[Any]:
+def _dedupe_scalars(items: list[Any]) -> list[Any]:
     """Dedupe scalar list items while preserving order."""
-    out: List[Any] = []
+    out: list[Any] = []
     seen = set()
     for x in items:
         if isinstance(x, (str, int, float, bool)) or x is None:
@@ -49,7 +49,7 @@ def _merge(a: Any, b: Any) -> Any:
     on conflicts, values in `a` are kept.
     """
     if isinstance(a, dict) and isinstance(b, dict):
-        result: Dict[str, Any] = deepcopy(a)
+        result: dict[str, Any] = deepcopy(a)
         for k, v in b.items():
             if k not in result:
                 result[k] = deepcopy(v)
@@ -75,7 +75,7 @@ def _merge(a: Any, b: Any) -> Any:
     return deepcopy(a)
 
 
-def _read_json(path: Path) -> Dict[str, Any]:
+def _read_json(path: Path) -> dict[str, Any]:
     """Read a JSON file and return dict."""
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -84,7 +84,7 @@ def _read_json(path: Path) -> Dict[str, Any]:
     return data
 
 
-def _write_json(path: Path, data: Dict[str, Any]) -> None:
+def _write_json(path: Path, data: dict[str, Any]) -> None:
     """Write dict to JSON file (pretty) ensuring parent exists."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
@@ -116,7 +116,7 @@ def combine_manifests(
     django = _read_json(dj_path)
     flasky = _read_json(fl_path)
 
-    combined: Dict[str, Any] = {
+    combined: dict[str, Any] = {
         "manifest_version": 1,
         "combined_from": [
             {

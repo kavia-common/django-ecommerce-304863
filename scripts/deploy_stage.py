@@ -13,12 +13,12 @@ Actual logic is implemented in scripts/deploy_impl.py.
 from __future__ import annotations
 
 import argparse
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from scripts.deploy_impl import stage_django50, stage_finalize, stage_flask
 
 
-def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Checkpoint-based staged deployment (django50 -> flask -> finalize)."
     )
@@ -31,7 +31,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint."""
     args = _parse_args(argv)
     if args.stage == "django50":

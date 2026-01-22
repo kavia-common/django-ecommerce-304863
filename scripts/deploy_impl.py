@@ -16,9 +16,9 @@ import signal
 import subprocess
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Tuple
 
 from scripts.deploy_state import update_state
 
@@ -43,16 +43,15 @@ class ExecResult:
 def _run(
     args: Sequence[str],
     *,
-    cwd: Optional[Path] = None,
-    env: Optional[Dict[str, str]] = None,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
     check: bool = True,
 ) -> ExecResult:
     p = subprocess.run(
         list(args),
         cwd=str(cwd) if cwd else None,
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         check=False,
     )
@@ -65,7 +64,7 @@ def _run(
     return res
 
 
-def _venv_paths() -> Tuple[Path, Path]:
+def _venv_paths() -> tuple[Path, Path]:
     venv_dir = Path(os.environ.get("VENV_PATH", str(REPO_ROOT / "venv"))).resolve()
     python_exe = venv_dir / "bin" / "python"
     return venv_dir, python_exe
@@ -93,7 +92,7 @@ def _django_manage(args: Sequence[str]) -> None:
     _run([str(python_exe), "manage.py", *list(args)], cwd=REPO_ROOT, env=env)
 
 
-def _http_get(url: str, *, timeout_s: int = 5) -> Tuple[int, str]:
+def _http_get(url: str, *, timeout_s: int = 5) -> tuple[int, str]:
     req = urllib.request.Request(url, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:  # nosec B310
@@ -135,7 +134,7 @@ def _try_init_flasky_db() -> None:
         _log(f"[deploy] WARN: Flasky DB init failed (continuing): {e}")
 
 
-def _discover_gunicorn_pid() -> Optional[int]:
+def _discover_gunicorn_pid() -> int | None:
     env_pid = os.environ.get("GUNICORN_PID")
     if env_pid and env_pid.isdigit():
         return int(env_pid)

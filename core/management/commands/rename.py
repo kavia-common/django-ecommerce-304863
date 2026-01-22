@@ -35,7 +35,7 @@ class Command(BaseCommand):
         ]
 
         for f in files_to_rename:
-            with open(f, "r", encoding="utf-8") as file:
+            with open(f, encoding="utf-8") as file:
                 filedata = file.read()
 
             filedata = filedata.replace(current_project_name, new_project_name)
@@ -46,5 +46,5 @@ class Command(BaseCommand):
         os.rename(current_project_name, new_project_name)
 
         self.stdout.write(
-            self.style.SUCCESS("Project has been renamed to %s" % new_project_name)
+            self.style.SUCCESS(f"Project has been renamed to {new_project_name}")
         )

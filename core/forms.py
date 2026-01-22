@@ -11,7 +11,11 @@ import re
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxLengthValidator, MinLengthValidator, RegexValidator
+from django.core.validators import (
+    MaxLengthValidator,
+    MinLengthValidator,
+    RegexValidator,
+)
 from django_countries.fields import CountryField
 from django_countries.widgets import CountrySelectWidget
 
@@ -113,7 +117,10 @@ class CheckoutForm(forms.Form):
     payment_option = forms.ChoiceField(
         widget=forms.RadioSelect,
         choices=PAYMENT_CHOICES,
-        error_messages={"required": _REQUIRED_MSG, "invalid_choice": _INVALID_CHOICE_MSG},
+        error_messages={
+            "required": _REQUIRED_MSG,
+            "invalid_choice": _INVALID_CHOICE_MSG,
+        },
     )
 
     def clean(self):

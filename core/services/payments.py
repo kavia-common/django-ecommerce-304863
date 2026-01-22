@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 import string
 from dataclasses import dataclass
-from typing import Optional
 
 import stripe
 from django.contrib.auth import get_user_model
@@ -19,8 +18,8 @@ class StripeChargeParams:
 
     amount_cents: int
     currency: str = "usd"
-    customer_id: Optional[str] = None
-    source_token: Optional[str] = None
+    customer_id: str | None = None
+    source_token: str | None = None
 
 
 # PUBLIC_INTERFACE
@@ -73,7 +72,9 @@ def create_stripe_charge(*, params: StripeChargeParams) -> dict:
 
 
 # PUBLIC_INTERFACE
-def finalize_successful_order(*, order: Order, user: get_user_model(), charge_id: str) -> Payment:
+def finalize_successful_order(
+    *, order: Order, user: get_user_model(), charge_id: str
+) -> Payment:
     """Create a Payment object and mark the order/items as ordered.
 
     Mirrors the original PaymentView.post behavior.

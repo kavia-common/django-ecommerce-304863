@@ -5,8 +5,8 @@ for a public internet deployment. It is designed to be *fail-safe*:
 misconfiguration should raise an error early rather than running insecurely.
 """
 
-from django.core.exceptions import ImproperlyConfigured
 from decouple import config
+from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F403,F401  (importing base settings intentionally)
 
@@ -65,7 +65,9 @@ ALLOWED_HOSTS = _allowed_hosts  # noqa: F405
 # Authentication hardening (keep behavior unchanged unless configured)
 # -----------------------------------------------------------------------------
 AUTH_PASSWORD_VALIDATORS = [  # noqa: F405
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -170,8 +172,16 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": "WARNING"},
     "loggers": {
         # Django request errors
-        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
         # Security-related issues
-        "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
     },
 }

@@ -31,9 +31,10 @@ import re
 import subprocess
 import tempfile
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 FLASKY_REMOTE_URL = "https://github.com/miguelgrinberg/flasky"
 
@@ -65,7 +66,7 @@ class WriteResult:
 
     path: Path
     changed: bool
-    old_sha256: Optional[str]
+    old_sha256: str | None
     new_sha256: str
 
 
@@ -76,7 +77,7 @@ class Logger:
         self._verbose = verbose
 
     def _ts(self) -> str:
-        return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def _emit(self, level: str, msg: str) -> None:
         print(f"[auto_reconcile {self._ts()}] {level}: {msg}", flush=True)
@@ -109,7 +110,7 @@ class Config:
     env_example_path: Path = ENV_EXAMPLE_PATH
 
     dockerfile_path: Path = DOCKERFILE_PATH
-    compose_candidates: Tuple[Path, ...] = tuple(COMPOSE_CANDIDATES)
+    compose_candidates: tuple[Path, ...] = tuple(COMPOSE_CANDIDATES)
 
     # Loop cadence
     interval_seconds: int = 300
@@ -124,7 +125,7 @@ class Config:
 
 
 def _utc_now_iso() -> str:
-    return dt.datetime.now(dt.timezone.utc).isoformat()
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -132,14 +133,13 @@ def _sha256_bytes(data: bytes) -> str:
 
 
 def _run_cmd(
-    args: Sequence[str], cwd: Optional[Path] = None, timeout_s: int = 30
-) -> Tuple[int, str, str]:
+    args: Sequence[str], cwd: Path | None = None, timeout_s: int = 30
+) -> tuple[int, str, str]:
     """Run a command and return (returncode, stdout, stderr)."""
     p = subprocess.run(
         list(args),
         cwd=str(cwd) if cwd else None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         timeout=timeout_s,
         check=False,
         text=True,
@@ -201,7 +201,7 @@ def _write_text_if_changed(path: Path, content: str, *, dry_run: bool) -> WriteR
     return WriteResult(path=path, changed=True, old_sha256=old_sha, new_sha256=new_sha)
 
 
-def _compute_change_summary(repo_root: Path, writes: List[WriteResult]) -> dict:
+def _compute_change_summary(repo_root: Path, writes: list[WriteResult]) -> dict:
     changed = [w for w in writes if w.changed]
     return {
         "files_touched": [str(w.path.relative_to(repo_root)) for w in writes],
@@ -210,7 +210,7 @@ def _compute_change_summary(repo_root: Path, writes: List[WriteResult]) -> dict:
     }
 
 
-def _get_local_git_head(repo_root: Path, logger: Logger) -> Optional[str]:
+def _get_local_git_head(repo_root: Path, logger: Logger) -> str | None:
     """Return local repo HEAD sha if available, else None."""
     if not _git_available() or not (repo_root / ".git").exists():
         logger.debug("git not available or .git missing; local HEAD unavailable")
@@ -222,7 +222,7 @@ def _get_local_git_head(repo_root: Path, logger: Logger) -> Optional[str]:
     return out
 
 
-def _get_flasky_remote_head(config: Config, logger: Logger) -> Optional[str]:
+def _get_flasky_remote_head(config: Config, logger: Logger) -> str | None:
     """
     Get Flasky HEAD commit sha without cloning/vendoring.
 
@@ -329,7 +329,7 @@ class StateStore:
             return
         _atomic_write_bytes(self._state_path, serialized.encode("utf-8"))
 
-    def _migrate_if_needed(self, state: Dict[str, Any]) -> Dict[str, Any]:
+    def _migrate_if_needed(self, state: dict[str, Any]) -> dict[str, Any]:
         """
         Migrate older schema versions to current.
 
@@ -387,7 +387,7 @@ class Reconciler:
         local_head = _get_local_git_head(self._config.repo_root, self._logger)
         flasky_head = _get_flasky_remote_head(self._config, self._logger)
 
-        writes: List[WriteResult] = []
+        writes: list[WriteResult] = []
 
         # Requirements reconciliation
         try:
@@ -439,7 +439,7 @@ class Reconciler:
 
         change_summary = _compute_change_summary(self._config.repo_root, writes)
 
-        state_after: Dict[str, Any] = {
+        state_after: dict[str, Any] = {
             "schema_version": STATE_SCHEMA_VERSION,
             "last_run_utc": _utc_now_iso(),
             "flasky": {
@@ -575,7 +575,7 @@ def _cmd_status(config: Config, logger: Logger) -> int:
     return 0
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     """
     CLI entrypoint.
 

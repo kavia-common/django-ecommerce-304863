@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from django.contrib.auth import get_user_model
 
@@ -15,9 +14,9 @@ class AddressSelectionResult:
     """Result of attempting to resolve/set addresses for an order."""
 
     order: Order
-    shipping_address: Optional[Address]
-    billing_address: Optional[Address]
-    error_message: Optional[str] = None
+    shipping_address: Address | None
+    billing_address: Address | None
+    error_message: str | None = None
 
 
 def _is_valid_form(values) -> bool:
@@ -25,7 +24,9 @@ def _is_valid_form(values) -> bool:
     return all(field != "" for field in values)
 
 
-def _get_default_address(*, user: get_user_model(), address_type: str) -> Optional[Address]:
+def _get_default_address(
+    *, user: get_user_model(), address_type: str
+) -> Address | None:
     qs = Address.objects.filter(user=user, address_type=address_type, default=True)
     return qs[0] if qs.exists() else None
 
@@ -58,14 +59,16 @@ def _create_address_from_form(
 
 
 # PUBLIC_INTERFACE
-def apply_checkout_form_to_order(*, user: get_user_model(), order: Order, form) -> AddressSelectionResult:
+def apply_checkout_form_to_order(
+    *, user: get_user_model(), order: Order, form
+) -> AddressSelectionResult:
     """Apply validated CheckoutForm data to the given order.
 
     This mirrors the original CheckoutView.post behavior but without view concerns.
     It does not redirect; it returns either addresses or an error message.
     """
-    shipping_address: Optional[Address] = None
-    billing_address: Optional[Address] = None
+    shipping_address: Address | None = None
+    billing_address: Address | None = None
 
     use_default_shipping = form.cleaned_data.get("use_default_shipping")
     if use_default_shipping:

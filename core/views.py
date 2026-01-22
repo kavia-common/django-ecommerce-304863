@@ -16,8 +16,15 @@ from django.views.generic import DetailView, ListView, View
 
 from .forms import CheckoutForm, CouponForm, PaymentForm, RefundForm
 from .models import Item, Order, UserProfile
-from .services.cart import add_item_to_cart, remove_item_from_cart, remove_single_quantity_from_cart
-from .services.checkout import apply_checkout_form_to_order, get_default_addresses_context
+from .services.cart import (
+    add_item_to_cart,
+    remove_item_from_cart,
+    remove_single_quantity_from_cart,
+)
+from .services.checkout import (
+    apply_checkout_form_to_order,
+    get_default_addresses_context,
+)
 from .services.coupons import get_coupon_by_code
 from .services.payments import (
     StripeChargeParams,
@@ -137,7 +144,9 @@ class PaymentView(LoginRequiredMixin, View):
                 save=save,
                 use_default=use_default,
             )
-            finalize_successful_order(order=order, user=self.request.user, charge_id=charge_id)
+            finalize_successful_order(
+                order=order, user=self.request.user, charge_id=charge_id
+            )
             messages.success(self.request, "Your order was successful!")
             return redirect("/")
 
