@@ -37,3 +37,75 @@ select = ["E", "F", "W", "I", "B", "UP"]
 ignore = [
   "E501", # line length is handled by Black formatting choices
 ]
+
+# -----------------------------------------------------------------------------
+# Pylint configuration (minimal + Django-pragmatic)
+# -----------------------------------------------------------------------------
+[tool.pylint.main]
+# Mirror Ruff/Black excludes (templates/static/migrations) plus runtime artifacts.
+ignore-paths = [
+  "db\\.sqlite3",
+  "static_in_env",
+  "templates",
+  ".*/migrations/.*",
+  "__pycache__",
+]
+# Let CI decide exit status; keep local runs friendly.
+fail-under = 0
+# Pylint 4.x supports pyproject configuration; keep output stable.
+persistent = true
+
+[tool.pylint.format]
+# Align with existing Black/Ruff setup while allowing a bit more headroom for settings/help text.
+max-line-length = 88
+
+[tool.pylint.messages_control]
+# Django projects produce a lot of false positives for dynamic attributes and ORM managers.
+# Keep "real bug" checks enabled; disable the most common noise sources.
+disable = [
+  # Docstring noise: prefer selective docstrings in entrypoints over boilerplate everywhere.
+  "missing-module-docstring",
+  "missing-class-docstring",
+  "missing-function-docstring",
+
+  # Django ORM + dynamic attributes frequently trigger these.
+  "no-member",
+
+  # Django CBVs/mixins can legitimately have deep ancestry.
+  "too-many-ancestors",
+
+  # Django models/forms/dataclasses often have few public methods by design.
+  "too-few-public-methods",
+
+  # Settings modules commonly use star-import patterns for environment overlays.
+  "wildcard-import",
+  "unused-wildcard-import",
+
+  # Templates-driven apps often keep TODOs in views intentionally.
+  "fixme",
+
+  # Pylint is often overly strict for Django views; keep code readable.
+  "too-many-return-statements",
+  "too-many-arguments",
+]
+
+[tool.pylint.typecheck]
+# Additional Django-related dynamic attribute help.
+ignored-classes = [
+  "django.db.models.manager.BaseManager",
+  "django.db.models.manager.Manager",
+  "django.db.models.query.QuerySet",
+]
+generated-members = [
+  "objects",
+  "DoesNotExist",
+  "MultipleObjectsReturned",
+]
+
+[tool.pylint.design]
+# Allow a bit more complexity for view modules without refactors.
+max-parents = 10
+max-attributes = 12
+max-locals = 20
+max-branches = 16
+max-statements = 60

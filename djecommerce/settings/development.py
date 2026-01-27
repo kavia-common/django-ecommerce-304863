@@ -1,6 +1,10 @@
-"""Development Django settings."""
+"""Development Django settings.
 
-from .base import *  # noqa: F403,F401  (importing base settings intentionally)
+This module intentionally overlays settings on top of `base.py` using a star import
+to keep settings overrides concise and familiar to Django users.
+"""
+
+from .base import *  # noqa: F403,F401  # pylint: disable=wildcard-import,unused-wildcard-import
 
 DEBUG = True
 ALLOWED_HOSTS = ["127.0.0.1"]

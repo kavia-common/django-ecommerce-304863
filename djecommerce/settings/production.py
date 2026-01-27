@@ -8,7 +8,7 @@ misconfiguration should raise an error early rather than running insecurely.
 from decouple import config
 from django.core.exceptions import ImproperlyConfigured
 
-from .base import *  # noqa: F403,F401  (importing base settings intentionally)
+from .base import *  # noqa: F403,F401  # pylint: disable=wildcard-import,unused-wildcard-import
 
 
 def _require_env(name: str) -> str:

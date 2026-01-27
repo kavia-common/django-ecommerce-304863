@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+"""Django management entrypoint.
+
+This is the standard `manage.py` wrapper used by Django to run admin commands
+(runserver, migrate, collectstatic, etc.).
+"""
+
 import os
 import sys
 
