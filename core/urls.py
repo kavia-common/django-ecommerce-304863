@@ -14,11 +14,13 @@ from .views import (
     remove_from_cart,
     remove_single_item_from_cart,
 )
+from .views_catalog import CatalogListView, HomeLandingView
 
 app_name = "core"
 
 urlpatterns = [
-    path("", HomeView.as_view(), name="home"),
+    path("", HomeLandingView.as_view(), name="home"),
+    path("shop/", CatalogListView.as_view(), name="catalog"),
     path("checkout/", CheckoutView.as_view(), name="checkout"),
     path("order-summary/", OrderSummaryView.as_view(), name="order-summary"),
     path("product/<slug>/", ItemDetailView.as_view(), name="product"),

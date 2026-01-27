@@ -274,6 +274,20 @@ class ItemDetailView(DetailView):
     model = Item
     template_name = "product.html"
 
+    def get_queryset(self):
+        """Optimize item detail query (avoid selecting unused fields)."""
+        return Item.objects.only(
+            "id",
+            "title",
+            "price",
+            "discount_price",
+            "category",
+            "label",
+            "slug",
+            "description",
+            "image",
+        )
+
 
 @login_required
 def add_to_cart(request, slug):

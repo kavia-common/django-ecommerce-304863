@@ -1,0 +1,222 @@
+/* App-specific modern layer on top of Bootstrap/MDB.
+   Keep this small, focused, and compatible with existing templates. */
+
+:root {
+  --app-radius: 16px;
+  --app-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  --app-shadow-soft: 0 8px 20px rgba(0, 0, 0, 0.06);
+  --app-border: rgba(0, 0, 0, 0.06);
+}
+
+.app-body {
+  background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 45%, #ffffff 100%);
+}
+
+.app-content {
+  min-height: 70vh;
+}
+
+/* Navbar polish */
+.app-navbar {
+  backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.app-brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #1976d2;
+  box-shadow: 0 0 0 6px rgba(25, 118, 210, 0.15);
+}
+
+.app-brand-text {
+  letter-spacing: 0.2px;
+}
+
+.app-nav-search .form-control {
+  border-radius: 999px;
+}
+
+/* Hero */
+.app-hero {
+  padding-top: 2rem;
+  padding-bottom: 1.5rem;
+}
+
+.app-kicker {
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #1976d2;
+}
+
+.app-hero-badges .badge {
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--app-border);
+}
+
+.app-hero-card {
+  border-radius: var(--app-radius);
+  background: radial-gradient(1200px 400px at 20% 0%, rgba(25, 118, 210, 0.18), transparent 55%),
+              linear-gradient(135deg, #ffffff 0%, #f3f7ff 100%);
+  box-shadow: var(--app-shadow);
+  border: 1px solid var(--app-border);
+  overflow: hidden;
+}
+
+.app-hero-card-inner {
+  padding: 1rem;
+}
+
+.app-hero-card-top {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem 0.25rem 0.75rem;
+}
+
+.app-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.app-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.app-mini-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border-radius: 14px;
+  border: 1px solid var(--app-border);
+  background: rgba(255, 255, 255, 0.75);
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.app-mini-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--app-shadow-soft);
+  background: #ffffff;
+  text-decoration: none;
+}
+
+.app-mini-img {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--app-border);
+}
+
+.app-mini-title {
+  font-weight: 700;
+  color: #111;
+  font-size: 0.95rem;
+  line-height: 1.1;
+}
+
+.app-mini-price {
+  color: #1976d2;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* Panels and cards */
+.app-panel {
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.app-card {
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  overflow: hidden;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.app-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--app-shadow);
+}
+
+.app-card-media {
+  position: relative;
+  display: block;
+  overflow: hidden;
+}
+
+.app-card-media img {
+  height: 190px;
+  width: 100%;
+  object-fit: cover;
+  transition: transform 220ms ease;
+}
+
+.app-card:hover .app-card-media img {
+  transform: scale(1.03);
+}
+
+.app-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.00) 55%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.app-card:hover .app-card-overlay {
+  opacity: 1;
+}
+
+.app-badge {
+  border: 1px solid var(--app-border);
+}
+
+.app-price {
+  font-size: 1.05rem;
+}
+
+.app-btn-animate {
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.app-btn-animate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* Product media */
+.app-product-media {
+  border-radius: var(--app-radius);
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
+}
+
+/* Tables */
+.app-table-head th {
+  background: rgba(0, 0, 0, 0.02);
+  border-top: none !important;
+}
+
+.app-total-row td {
+  background: rgba(25, 118, 210, 0.06);
+}
+
+/* Mobile adjustments */
+@media (max-width: 576px) {
+  .app-hero {
+    padding-top: 1rem;
+  }
+
+  .app-card-media img {
+    height: 160px;
+  }
+}

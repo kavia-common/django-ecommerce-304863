@@ -1,0 +1,28 @@
+<div class="card app-card h-100">
+  <a class="app-card-media" href="{{ item.get_absolute_url }}">
+    <img src="{{ item.image.url }}" class="card-img-top" alt="{{ item.title }}">
+    <div class="app-card-overlay"></div>
+  </a>
+
+  <div class="card-body d-flex flex-column">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <span class="badge badge-pill badge-light app-badge">{{ item.get_category_display }}</span>
+      <span class="badge badge-pill {{ item.get_label_display }}-color">NEW</span>
+    </div>
+
+    <h5 class="card-title mb-1">
+      <a class="stretched-link text-dark" href="{{ item.get_absolute_url }}">{{ item.title }}</a>
+    </h5>
+
+    <div class="mt-auto">
+      <div class="app-price">
+        {% if item.discount_price %}
+          <span class="text-muted mr-2"><del>${{ item.price }}</del></span>
+          <span class="font-weight-bold">${{ item.discount_price }}</span>
+        {% else %}
+          <span class="font-weight-bold">${{ item.price }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>

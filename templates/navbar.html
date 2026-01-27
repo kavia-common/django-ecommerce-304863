@@ -1,11 +1,12 @@
 {% load cart_template_tags %}
 
-<nav class="navbar fixed-top navbar-expand-lg navbar-light white scrolling-navbar">
+<nav class="navbar fixed-top navbar-expand-lg navbar-light white scrolling-navbar app-navbar">
     <div class="container">
 
       <!-- Brand -->
-      <a class="navbar-brand waves-effect" href="/">
-        <strong class="blue-text">DJe-commerce</strong>
+      <a class="navbar-brand waves-effect d-flex align-items-center" href="/">
+        <span class="app-brand-mark mr-2" aria-hidden="true"></span>
+        <strong class="blue-text app-brand-text">DJe-commerce</strong>
       </a>
 
       <!-- Collapse -->
@@ -19,19 +20,20 @@
 
         <!-- Left -->
         <ul class="navbar-nav mr-auto">
-          {% comment %} <li class="nav-item active">
-            <a class="nav-link waves-effect" href="/">Home
-              <span class="sr-only">(current)</span>
-            </a>
-          </li>
           <li class="nav-item">
-            <a class="nav-link waves-effect" href="/checkout">
-            Checkout</a>
-          </li> {% endcomment %}
+            <a class="nav-link waves-effect" href="{% url 'core:catalog' %}">Shop</a>
+          </li>
+          <li class="nav-item d-none d-lg-block">
+            <form class="form-inline my-0 ml-2" action="{% url 'core:catalog' %}" method="get" role="search" aria-label="Search products">
+              <div class="md-form my-0 app-nav-search">
+                <input class="form-control mr-sm-2" type="search" name="q" placeholder="Search products…" aria-label="Search">
+              </div>
+            </form>
+          </li>
         </ul>
 
         <!-- Right -->
-        <ul class="navbar-nav nav-flex-icons">
+        <ul class="navbar-nav nav-flex-icons align-items-lg-center">
           {% if request.user.is_authenticated %}
           <li class="nav-item">
             <a href="{% url 'core:order-summary' %}" class="nav-link waves-effect">
