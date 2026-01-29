@@ -13,10 +13,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from core.api_serializers import (ReviewAdminSerializer,
-                                  ReviewModerationSerializer,
-                                  ReviewPublicSerializer,
-                                  ReviewWriteSerializer)
+from core.api_serializers import (
+    ReviewAdminSerializer,
+    ReviewModerationSerializer,
+    ReviewPublicSerializer,
+    ReviewWriteSerializer,
+)
 from core.models import Review
 from core.permissions import IsAdminGroupOrDjangoPermission
 

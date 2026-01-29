@@ -1,10 +1,12 @@
 import pytest
 from django.core.exceptions import ValidationError
 
-from core.inventory import (commit_inventory_for_paid_order,
-                            release_inventory_reservations_for_order,
-                            reserve_inventory_for_order,
-                            restock_inventory_for_order_refund)
+from core.inventory import (
+    commit_inventory_for_paid_order,
+    release_inventory_reservations_for_order,
+    reserve_inventory_for_order,
+    restock_inventory_for_order_refund,
+)
 from core.models import InventoryAdjustment
 
 

@@ -89,7 +89,9 @@ class WishlistItemSerializer(serializers.ModelSerializer):
     title = serializers.CharField(source="item.title", read_only=True)
     price = serializers.FloatField(source="item.price", read_only=True)
     slug = serializers.SlugField(source="item.slug", read_only=True)
-    available_stock = serializers.IntegerField(source="item.available_stock", read_only=True)
+    available_stock = serializers.IntegerField(
+        source="item.available_stock", read_only=True
+    )
     image = serializers.ImageField(source="item.image", read_only=True)
 
     class Meta:

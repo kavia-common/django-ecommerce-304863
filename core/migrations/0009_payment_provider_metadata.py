@@ -14,7 +14,6 @@ def backfill_provider_reference(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0008_orderitem_inventory_tracking"),
     ]

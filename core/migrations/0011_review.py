@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0010_wishlist_item"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

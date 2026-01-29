@@ -22,7 +22,6 @@ def backfill_order_status(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0006_catalog_inventory_enhancements"),
     ]

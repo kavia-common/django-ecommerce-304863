@@ -18,7 +18,11 @@ from .inventory import (
     reserve_inventory_for_order,
 )
 from .models import Address, Coupon, Item, Order, OrderItem, Refund, UserProfile
-from .payment_service import PaymentResultCode, attempt_payment_for_order, get_payment_mode
+from .payment_service import (
+    PaymentResultCode,
+    attempt_payment_for_order,
+    get_payment_mode,
+)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -73,7 +77,6 @@ class CheckoutView(View):
         try:
             order = Order.objects.get(user=self.request.user, ordered=False)
             if form.is_valid():
-
                 use_default_shipping = form.cleaned_data.get("use_default_shipping")
                 if use_default_shipping:
                     print("Using the defualt shipping address")

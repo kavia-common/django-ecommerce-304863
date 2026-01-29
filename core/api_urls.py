@@ -18,7 +18,6 @@ Order routes (new canonical):
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from core.api_viewsets import ProductViewSet, WishlistViewSet
 from core.api_views import (
     AdminCouponDetailAPIView,
     AdminCouponListCreateAPIView,
@@ -34,6 +33,7 @@ from core.api_views import (
     PublicItemDetailAPIView,
     PublicItemListAPIView,
 )
+from core.api_viewsets import ProductViewSet, WishlistViewSet
 from core.reviews_viewset import ReviewViewSet
 
 router = DefaultRouter()
