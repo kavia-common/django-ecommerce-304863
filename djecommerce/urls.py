@@ -9,7 +9,7 @@ urlpatterns = [
     path('accounts/', include('allauth.urls')),
 
     # API endpoints (DRF + JWT). Kept separate from template-based routes.
-    path('api/health/', include('core.api_urls')),
+    path('api/', include('core.api_urls')),
     path('api/auth/jwt/create/', TokenObtainPairView.as_view(), name='jwt-create'),
     path('api/auth/jwt/refresh/', TokenRefreshView.as_view(), name='jwt-refresh'),
     path('api/auth/jwt/verify/', TokenVerifyView.as_view(), name='jwt-verify'),

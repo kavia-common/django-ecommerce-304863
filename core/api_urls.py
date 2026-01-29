@@ -14,12 +14,23 @@ from core.api_views import (
     AdminItemListCreateAPIView,
     AdminOrderStatusTransitionAPIView,
     AdminRefundModerationAPIView,
+    AdminRefundModerationAPIView,
     HealthAPIView,
+    MyOrderDetailAPIView,
+    MyOrdersListAPIView,
+    PublicItemDetailAPIView,
+    PublicItemListAPIView,
 )
 
 urlpatterns = [
-    # Public/utility
+    # Utility
     path("health/", HealthAPIView.as_view(), name="api-health"),
+    # Public read-only catalog
+    path("products/", PublicItemListAPIView.as_view(), name="api-products"),
+    path("products/<int:item_id>/", PublicItemDetailAPIView.as_view(), name="api-product-detail"),
+    # Customer (JWT/session) endpoints
+    path("me/orders/", MyOrdersListAPIView.as_view(), name="api-my-orders"),
+    path("me/orders/<int:order_id>/", MyOrderDetailAPIView.as_view(), name="api-my-order-detail"),
     # Admin (RBAC enforced via DRF permissions)
     path("admin/products/", AdminItemListCreateAPIView.as_view(), name="api-admin-products"),
     path("admin/products/<int:item_id>/", AdminItemDetailAPIView.as_view(), name="api-admin-product-detail"),

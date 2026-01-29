@@ -16,9 +16,17 @@ def bootstrap_groups_and_permissions(apps, schema_editor):
         "change_item",
         "delete_item",
         "view_item",
+        # Inventory-ish / cart related (OrderItem)
+        "add_orderitem",
+        "change_orderitem",
+        "delete_orderitem",
+        "view_orderitem",
         # Orders
         "change_order",
         "view_order",
+        # Address/Payment records often need admin inspection in real deployments
+        "view_address",
+        "view_payment",
         # Coupons
         "add_coupon",
         "change_coupon",
@@ -50,8 +58,14 @@ def remove_groups_permissions(apps, schema_editor):
         "change_item",
         "delete_item",
         "view_item",
+        "add_orderitem",
+        "change_orderitem",
+        "delete_orderitem",
+        "view_orderitem",
         "change_order",
         "view_order",
+        "view_address",
+        "view_payment",
         "add_coupon",
         "change_coupon",
         "delete_coupon",

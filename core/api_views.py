@@ -4,8 +4,15 @@ Core DRF API views.
 These API endpoints are separate from template-based routes and are intended for
 programmatic access (mobile apps, SPA, admin dashboards, etc.).
 
-RBAC:
-- Admin-only endpoints enforce access via Django Groups/Permissions.
+RBAC strategy:
+- Public endpoints:
+  - AllowAny + read-only access (GET/HEAD/OPTIONS)
+- Authenticated user endpoints:
+  - IsAuthenticated and user-scoped queryset access (object-level checks)
+- Admin endpoints:
+  - IsAuthenticated + Admin group OR required Django model permissions
+
+We use Django's built-in Groups/Permissions system (see migration 0005_...).
 """
 
 from __future__ import annotations
@@ -58,11 +65,115 @@ class CouponSerializer(serializers.ModelSerializer):
         fields = ["id", "code", "amount"]
 
 
+class OrderSerializer(serializers.ModelSerializer):
+    """
+    Minimal order representation for API clients.
+
+    Note: We don't embed full OrderItem details here to keep the API surface small.
+    """
+
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "ref_code",
+            "ordered",
+            "ordered_date",
+            "being_delivered",
+            "received",
+            "refund_requested",
+            "refund_granted",
+            "total",
+        ]
+
+    def get_total(self, obj) -> float:
+        return obj.get_total()
+
+
 class OrderStatusTransitionSerializer(serializers.Serializer):
     being_delivered = serializers.BooleanField(required=False)
     received = serializers.BooleanField(required=False)
     refund_requested = serializers.BooleanField(required=False)
     refund_granted = serializers.BooleanField(required=False)
+
+
+# -------------------------
+# Public endpoints (read-only)
+# -------------------------
+
+
+class PublicItemListAPIView(APIView):
+    """
+    Public: list products.
+
+    - Read-only (GET/HEAD/OPTIONS).
+    - No authentication required.
+    """
+
+    permission_classes = [AllowAny]
+
+    # PUBLIC_INTERFACE
+    def get(self, request, *args, **kwargs):
+        """List products (public)."""
+        items = Item.objects.all().order_by("id")
+        return Response(ItemSerializer(items, many=True).data)
+
+
+class PublicItemDetailAPIView(APIView):
+    """
+    Public: retrieve a product by id.
+
+    - Read-only (GET/HEAD/OPTIONS).
+    - No authentication required.
+    """
+
+    permission_classes = [AllowAny]
+
+    # PUBLIC_INTERFACE
+    def get(self, request, item_id: int, *args, **kwargs):
+        """Retrieve a product (public)."""
+        item = get_object_or_404(Item, pk=item_id)
+        return Response(ItemSerializer(item).data)
+
+
+# -------------------------
+# Authenticated user endpoints (customer scope)
+# -------------------------
+
+
+class MyOrdersListAPIView(APIView):
+    """
+    Customer: list the authenticated user's orders.
+
+    JWT-protected (or session auth) via IsAuthenticated.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # PUBLIC_INTERFACE
+    def get(self, request, *args, **kwargs):
+        """List orders for the current user."""
+        orders = Order.objects.filter(user=request.user).order_by("-id")
+        return Response(OrderSerializer(orders, many=True).data)
+
+
+class MyOrderDetailAPIView(APIView):
+    """
+    Customer: retrieve an order that belongs to the authenticated user.
+
+    Object-level access enforcement:
+    - 404 if the order does not belong to the requesting user.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # PUBLIC_INTERFACE
+    def get(self, request, order_id: int, *args, **kwargs):
+        """Retrieve one order for the current user."""
+        order = get_object_or_404(Order, pk=order_id, user=request.user)
+        return Response(OrderSerializer(order).data)
 
 
 # -------------------------
@@ -170,7 +281,7 @@ class AdminCouponDetailAPIView(APIView):
     Admin: update/delete coupon.
 
     Requires Admin group OR relevant model permissions:
-    - core.change_coupon / core.delete_coupon
+    - core.change_coupon / core.delete_coupon / core.view_coupon
     """
 
     permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
