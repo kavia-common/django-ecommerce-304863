@@ -1,0 +1,38 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools %}
+  {{ block.super }}
+{% endblock %}
+
+{% block after_related_objects %}
+  {{ block.super }}
+
+  {% if change and original and order_allowed_transitions %}
+    <div class="module">
+      <h2>{% trans "Order management" %}</h2>
+
+      <div style="margin: 8px 0;">
+        <strong>{% trans "Status" %}:</strong> {{ original.status }}
+      </div>
+
+      <div style="margin: 8px 0;">
+        <strong>{% trans "Allowed transitions" %}:</strong>
+        {% for t in order_allowed_transitions %}
+          <a class="button"
+             href="{{ t.url }}"
+             style="margin-right: 6px;"
+             onclick="return confirm('{% trans "Are you sure you want to transition this order to" %} {{ t.status }}?');">
+            {% trans "Transition to" %} {{ t.status }}
+          </a>
+        {% empty %}
+          <span>{% trans "No transitions available." %}</span>
+        {% endfor %}
+      </div>
+
+      <p class="help">
+        {% trans "Transitions are validated and recorded in OrderStatusHistory. Inventory operations are applied idempotently for PAID/CANCELLED/REFUNDED." %}
+      </p>
+    </div>
+  {% endif %}
+{% endblock %}
