@@ -6,9 +6,9 @@ from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import F
+from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils import timezone
-from django.utils.html import format_html
 
 from .inventory import (
     commit_inventory_for_paid_order,
@@ -185,18 +185,22 @@ class InventoryAdjustmentAdmin(AdminOnlyModelAdmin):
         When an admin creates an InventoryAdjustment from the adjustments screen,
         automatically apply the delta to Item.stock_on_hand so the adjustment is meaningful.
 
-        Note: This keeps existing inventory services intact; it's a management convenience.
+        Safety:
+        - Prevents negative stock_on_hand.
+        - Applies item update + adjustment creation atomically.
         """
         _assert_admin(request)
 
         with transaction.atomic():
-            obj.created_by = request.user
-            super().save_model(request, obj, form, change)
-
             item = Item.objects.select_for_update().get(pk=obj.item_id)
             new_stock = int(item.stock_on_hand or 0) + int(obj.delta or 0)
             if new_stock < 0:
                 raise ValidationError("Inventory adjustment would make stock_on_hand negative.")
+
+            # Save the adjustment only after we know it's valid.
+            obj.created_by = request.user
+            super().save_model(request, obj, form, change)
+
             item.stock_on_hand = new_stock
             item.save(update_fields=["stock_on_hand"])
 
@@ -251,9 +255,8 @@ def _transition_orders(
     failed = 0
 
     for order in queryset.select_related("payment", "coupon", "user").all():
-        # NOTE: We intentionally use a new idempotency key per order per admin action invocation.
-        # This keeps admin action retried clicks safe while still recording audit history.
-        idem = f"admin:{target_status}:{order.id}:{uuid.uuid4().hex}"
+        # Idempotency: stable per order+target.
+        idem = f"admin-bulk:{target_status}:{order.id}"
 
         try:
             if inventory_mode == "paid":
@@ -291,7 +294,6 @@ def _transition_orders(
             )
             success += 1
         except ValueError:
-            # Invalid transition: treat as a skip (idempotent-ish UX).
             skipped += 1
         except Exception:
             failed += 1
@@ -418,7 +420,7 @@ class OrderAdmin(AdminOnlyModelAdmin):
         order = self.get_object(request, object_id)
         if order is None:
             self.message_user(request, "Order not found.", level=messages.ERROR)
-            return None
+            return HttpResponseRedirect(reverse("admin:core_order_changelist"))
 
         if not self.has_change_permission(request, obj=order):
             raise PermissionDenied("You do not have permission to change this order.")
@@ -432,9 +434,8 @@ class OrderAdmin(AdminOnlyModelAdmin):
         elif target_status == Order.Status.REFUNDED:
             inventory_mode = "refund"
 
-        # Stable-ish idempotency key per click. We include uuid so repeated clicks always
-        # write history but still remain safe (inventory services are idempotent by design).
-        idem = f"admin-btn:{target_status}:{order.id}:{uuid.uuid4().hex}"
+        # Idempotency: stable per order+target.
+        idem = f"admin-btn:{target_status}:{order.id}"
 
         try:
             if inventory_mode == "paid":
@@ -463,10 +464,7 @@ class OrderAdmin(AdminOnlyModelAdmin):
                 )
         except Exception as e:
             self.message_user(request, f"Inventory operation failed: {e}", level=messages.ERROR)
-            return_url = reverse("admin:core_order_change", args=[order.pk])
-            from django.shortcuts import redirect
-
-            return redirect(return_url)
+            return HttpResponseRedirect(reverse("admin:core_order_change", args=[order.pk]))
 
         try:
             order.transition_status(
@@ -482,9 +480,7 @@ class OrderAdmin(AdminOnlyModelAdmin):
         except Exception as e:
             self.message_user(request, f"Transition failed: {e}", level=messages.ERROR)
 
-        from django.shortcuts import redirect
-
-        return redirect(reverse("admin:core_order_change", args=[order.pk]))
+        return HttpResponseRedirect(reverse("admin:core_order_change", args=[order.pk]))
 
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
         """
@@ -502,11 +498,7 @@ class OrderAdmin(AdminOnlyModelAdmin):
             }
             allowed = allowed_map.get(obj.status, [])
             context["order_allowed_transitions"] = [
-                {
-                    "status": s,
-                    "url": reverse("admin:core_order_transition", args=[obj.pk, s]),
-                }
-                for s in allowed
+                {"status": s, "url": reverse("admin:core_order_transition", args=[obj.pk, s])} for s in allowed
             ]
         else:
             context["order_allowed_transitions"] = []
@@ -594,7 +586,7 @@ admin.site.register(WishlistItem, WishlistItemAdmin)
 # Coupons admin (management enhancements)
 # -------------------------
 #
-# Note: The current Coupon model in core.models is the legacy version (code, amount only).
+# Note: The current Coupon model in core.models may still be the legacy version (code, amount only).
 # The request asked for validity windows, usage limits, min spend, type, active flag, and
 # redemptions inline. Those require schema support; this admin keeps changes additive and
 # will automatically expose those fields if/when the model is upgraded.
@@ -623,7 +615,11 @@ class CouponRedemptionInline(admin.TabularInline):
     extra = 0
     can_delete = False
     ordering = ("-created_at", "-id") if CouponRedemption else ("-id",)
-    readonly_fields = ("created_at",) if CouponRedemption and any(f.name == "created_at" for f in CouponRedemption._meta.fields) else ()
+    readonly_fields = (
+        ("created_at",)
+        if CouponRedemption and any(f.name == "created_at" for f in CouponRedemption._meta.fields)
+        else ()
+    )
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -632,16 +628,56 @@ class CouponRedemptionInline(admin.TabularInline):
         return False
 
 
+# PUBLIC_INTERFACE
+def activate_coupons(modeladmin, request, queryset):
+    """Activate selected coupons (is_active=True) when supported by the schema."""
+    _assert_admin(request)
+    model_fields = {f.name for f in modeladmin.model._meta.get_fields()}
+    if "is_active" not in model_fields:
+        modeladmin.message_user(
+            request,
+            "This coupon schema does not include 'is_active'. No changes applied.",
+            level=messages.WARNING,
+        )
+        return
+    updated = queryset.update(is_active=True)
+    modeladmin.message_user(request, f"Activated {updated} coupon(s).", level=messages.SUCCESS)
+
+
+# PUBLIC_INTERFACE
+def deactivate_coupons(modeladmin, request, queryset):
+    """Deactivate selected coupons (is_active=False) when supported by the schema."""
+    _assert_admin(request)
+    model_fields = {f.name for f in modeladmin.model._meta.get_fields()}
+    if "is_active" not in model_fields:
+        modeladmin.message_user(
+            request,
+            "This coupon schema does not include 'is_active'. No changes applied.",
+            level=messages.WARNING,
+        )
+        return
+    updated = queryset.update(is_active=False)
+    modeladmin.message_user(request, f"Deactivated {updated} coupon(s).", level=messages.SUCCESS)
+
+
 class CouponAdmin(AdminOnlyModelAdmin):
     list_display = ["id", "code", "amount"]
     search_fields = ["code"]
     ordering = ["-id"]
+    actions = [activate_coupons, deactivate_coupons]
 
     def get_list_display(self, request):
         base = list(super().get_list_display(request))
-        # If upgraded fields exist, show them.
         model_fields = {f.name for f in self.model._meta.get_fields()}
-        for extra in ["is_active", "valid_from", "valid_until", "usage_limit", "times_redeemed", "min_spend", "discount_type"]:
+        for extra in [
+            "is_active",
+            "valid_from",
+            "valid_until",
+            "usage_limit",
+            "times_redeemed",
+            "min_spend",
+            "discount_type",
+        ]:
             if extra in model_fields and extra not in base:
                 base.append(extra)
         return base
@@ -675,27 +711,53 @@ admin.site.register(Refund, AdminOnlyModelAdmin)
 
 # PUBLIC_INTERFACE
 def approve_reviews(modeladmin, request, queryset):
-    """Approve selected reviews (is_approved=True)."""
+    """Approve selected reviews (is_approved=True) (idempotent)."""
     _assert_admin(request)
-    updated = queryset.update(is_approved=True)
+    updated = queryset.filter(is_approved=False).update(is_approved=True)
     modeladmin.message_user(request, f"Approved {updated} review(s).", level=messages.SUCCESS)
 
 
 # PUBLIC_INTERFACE
 def reject_reviews(modeladmin, request, queryset):
-    """Reject selected reviews (is_approved=False)."""
+    """Reject selected reviews (is_approved=False) (idempotent)."""
     _assert_admin(request)
-    updated = queryset.update(is_approved=False)
+    updated = queryset.filter(is_approved=True).update(is_approved=False)
     modeladmin.message_user(request, f"Rejected {updated} review(s).", level=messages.SUCCESS)
 
 
 class ReviewAdmin(AdminOnlyModelAdmin):
-    list_display = ["id", "item", "user", "rating", "is_approved", "created_at", "updated_at"]
+    list_display = [
+        "id",
+        "item",
+        "user",
+        "rating",
+        "is_approved",
+        "brief_content",
+        "created_at",
+        "updated_at",
+    ]
     list_filter = ["is_approved", "rating", "created_at"]
     search_fields = ["user__username", "user__email", "item__title", "item__sku", "title", "body"]
     ordering = ["-created_at", "-id"]
     actions = [approve_reviews, reject_reviews]
     readonly_fields = ["created_at", "updated_at"]
+
+    def get_queryset(self, request):
+        """
+        Defense-in-depth: ensure only admin users can ever see reviews in admin.
+        (AdminOnlyModelAdmin already hides the module; this adds a hard guarantee.)
+        """
+        qs = super().get_queryset(request)
+        if not _is_admin_user(request.user):
+            return qs.none()
+        return qs
+
+    @admin.display(description="Content")
+    def brief_content(self, obj: Review) -> str:
+        body = (obj.body or "").strip().replace("\n", " ")
+        if len(body) > 60:
+            body = body[:57] + "..."
+        return body
 
     def get_readonly_fields(self, request, obj=None):
         """
