@@ -25,6 +25,12 @@ from rest_framework.views import APIView
 
 from core.models import Coupon, Item, Order, OrderStatusHistory, Refund
 from core.permissions import IsAdminGroupOrDjangoPermission
+from core.inventory import (
+    commit_inventory_for_paid_order,
+    release_inventory_reservations_for_order,
+    reserve_inventory_for_order,
+    restock_inventory_for_order_refund,
+)
 
 
 class HealthAPIView(APIView):
@@ -361,9 +367,44 @@ class AdminOrderStatusTransitionAPIView(APIView):
         if idempotency_key == "":
             idempotency_key = None
 
+        target_status = payload["target_status"]
+
+        # Inventory actions should be tied to status changes to keep domain consistent.
+        # NOTE: We perform the inventory operation *before* the transition where it matters:
+        # - PAID: ensure reservation exists then commit.
+        # - CANCELLED: release any outstanding reservations.
+        # - REFUNDED: restock (assumes committed previously).
+        try:
+            if target_status == Order.Status.PAID:
+                reserve_inventory_for_order(
+                    order=order,
+                    performed_by=request.user,
+                    idempotency_key=f"admin-reserve:{order.id}:{idempotency_key or target_status}",
+                )
+                commit_inventory_for_paid_order(
+                    order=order,
+                    performed_by=request.user,
+                    idempotency_key=f"admin-commit:{order.id}:{idempotency_key or target_status}",
+                )
+            elif target_status == Order.Status.CANCELLED:
+                release_inventory_reservations_for_order(
+                    order=order,
+                    performed_by=request.user,
+                    idempotency_key=f"admin-release:{order.id}:{idempotency_key or target_status}",
+                    reason="Released reservation due to admin cancellation",
+                )
+            elif target_status == Order.Status.REFUNDED:
+                restock_inventory_for_order_refund(
+                    order=order,
+                    performed_by=request.user,
+                    idempotency_key=f"admin-restock:{order.id}:{idempotency_key or target_status}",
+                )
+        except Exception as e:
+            return Response({"detail": f"Inventory operation failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             history = order.transition_status(
-                target_status=payload["target_status"],
+                target_status=target_status,
                 performed_by=request.user,
                 reason=payload.get("reason") or None,
                 idempotency_key=idempotency_key,
@@ -418,6 +459,12 @@ class AdminRefundModerationAPIView(APIView):
         # Mirror admin action behavior on the related order.
         order = refund.order
         if refund.accepted:
+            # Restock idempotently (safe if moderation endpoint is called multiple times).
+            restock_inventory_for_order_refund(
+                order=order,
+                performed_by=request.user,
+                idempotency_key=f"refund:{refund.id}:restock",
+            )
             # Transition to REFUNDED; idempotency key ensures repeat moderation calls are safe.
             order.transition_status(
                 target_status=Order.Status.REFUNDED,

@@ -158,6 +158,20 @@ class OrderItem(models.Model):
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     quantity = models.IntegerField(default=1)
 
+    # Inventory workflow tracking (idempotency + audit)
+    quantity_reserved = models.IntegerField(
+        default=0,
+        help_text="Units reserved on the Item for this OrderItem (not yet paid/fulfilled).",
+    )
+    quantity_committed = models.IntegerField(
+        default=0,
+        help_text="Units committed (sold) for this OrderItem after payment success.",
+    )
+    quantity_restocked = models.IntegerField(
+        default=0,
+        help_text="Units restocked back to on-hand due to refunds/returns.",
+    )
+
     def __str__(self):
         return f"{self.quantity} of {self.item.title}"
 
