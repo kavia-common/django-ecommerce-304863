@@ -85,9 +85,7 @@ def activate_items(modeladmin, request, queryset):
     """Activate selected products (is_active=True)."""
     _assert_admin(request)
     updated = queryset.update(is_active=True)
-    modeladmin.message_user(
-        request, f"Activated {updated} item(s).", level=messages.SUCCESS
-    )
+    modeladmin.message_user(request, f"Activated {updated} item(s).", level=messages.SUCCESS)
 
 
 # PUBLIC_INTERFACE
@@ -217,9 +215,7 @@ class InventoryAdjustmentAdmin(AdminOnlyModelAdmin):
             item = Item.objects.select_for_update().get(pk=obj.item_id)
             new_stock = int(item.stock_on_hand or 0) + int(obj.delta or 0)
             if new_stock < 0:
-                raise ValidationError(
-                    "Inventory adjustment would make stock_on_hand negative."
-                )
+                raise ValidationError("Inventory adjustment would make stock_on_hand negative.")
 
             # Save the adjustment only after we know it's valid.
             obj.created_by = request.user
@@ -367,25 +363,19 @@ def mark_paid(modeladmin, request, queryset):
 # PUBLIC_INTERFACE
 def mark_fulfilling(modeladmin, request, queryset):
     """Transition selected orders to FULFILLING."""
-    return _transition_orders(
-        modeladmin, request, queryset, target_status=Order.Status.FULFILLING
-    )
+    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.FULFILLING)
 
 
 # PUBLIC_INTERFACE
 def mark_shipped(modeladmin, request, queryset):
     """Transition selected orders to SHIPPED."""
-    return _transition_orders(
-        modeladmin, request, queryset, target_status=Order.Status.SHIPPED
-    )
+    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.SHIPPED)
 
 
 # PUBLIC_INTERFACE
 def mark_delivered(modeladmin, request, queryset):
     """Transition selected orders to DELIVERED."""
-    return _transition_orders(
-        modeladmin, request, queryset, target_status=Order.Status.DELIVERED
-    )
+    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.DELIVERED)
 
 
 # PUBLIC_INTERFACE
@@ -532,12 +522,8 @@ class OrderAdmin(AdminOnlyModelAdmin):
                     idempotency_key=f"admin-restock:{idem}",
                 )
         except Exception as e:
-            self.message_user(
-                request, f"Inventory operation failed: {e}", level=messages.ERROR
-            )
-            return HttpResponseRedirect(
-                reverse("admin:core_order_change", args=[order.pk])
-            )
+            self.message_user(request, f"Inventory operation failed: {e}", level=messages.ERROR)
+            return HttpResponseRedirect(reverse("admin:core_order_change", args=[order.pk]))
 
         try:
             order.transition_status(
@@ -588,10 +574,7 @@ class OrderAdmin(AdminOnlyModelAdmin):
             }
             allowed = allowed_map.get(obj.status, [])
             context["order_allowed_transitions"] = [
-                {
-                    "status": s,
-                    "url": reverse("admin:core_order_transition", args=[obj.pk, s]),
-                }
+                {"status": s, "url": reverse("admin:core_order_transition", args=[obj.pk, s])}
                 for s in allowed
             ]
         else:

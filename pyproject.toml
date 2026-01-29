@@ -2,7 +2,8 @@
 line-length = 88
 
 [tool.ruff.lint]
-# Keep Ruff's default rule selection; only add targeted per-file ignores.
+# Keep Ruff's default rule selection; only add targeted rule sets + per-file ignores.
+extend-select = ["B", "C4", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "djecommerce/settings/*.py" = ["F405"]

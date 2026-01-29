@@ -190,9 +190,7 @@ class ReviewViewSet(ModelViewSet):
             page = self.paginator
 
         paged = page.paginate_queryset(qs, request, view=self)
-        serializer = ReviewAdminSerializer(
-            paged if paged is not None else qs, many=True
-        )
+        serializer = ReviewAdminSerializer(paged if paged is not None else qs, many=True)
         if paged is not None:
             return page.get_paginated_response(serializer.data)
         return Response(serializer.data)

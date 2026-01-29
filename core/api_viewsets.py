@@ -141,9 +141,7 @@ class ProductViewSet(ModelViewSet):
             page = self.paginator
 
         paged = page.paginate_queryset(qs, request, view=self)
-        serializer = ReviewPublicSerializer(
-            paged if paged is not None else qs, many=True
-        )
+        serializer = ReviewPublicSerializer(paged if paged is not None else qs, many=True)
         if paged is not None:
             return page.get_paginated_response(serializer.data)
         return Response(serializer.data)
@@ -214,9 +212,7 @@ class WishlistViewSet(ViewSet):
             page = self.paginator
 
         paged = page.paginate_queryset(qs, request, view=self)
-        serializer = WishlistItemSerializer(
-            paged if paged is not None else qs, many=True
-        )
+        serializer = WishlistItemSerializer(paged if paged is not None else qs, many=True)
         if paged is not None:
             return page.get_paginated_response(serializer.data)
         return Response(serializer.data)
@@ -231,9 +227,7 @@ class WishlistViewSet(ViewSet):
         # Ensure item exists (404 if not).
         item = Item.objects.filter(pk=item_id).first()
         if not item:
-            return Response(
-                {"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Idempotent insert; safe under concurrency.
         try:
@@ -261,9 +255,7 @@ class WishlistViewSet(ViewSet):
         try:
             item_id = int(pk)
         except (TypeError, ValueError):
-            return Response(
-                {"detail": "Invalid item id."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Invalid item id."}, status=status.HTTP_400_BAD_REQUEST)
 
         WishlistItem.objects.filter(user=request.user, item_id=item_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
