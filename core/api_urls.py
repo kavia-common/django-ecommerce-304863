@@ -6,22 +6,33 @@ we can evolve an API surface (JWT/DRF) without impacting existing UI routes.
 """
 
 from django.urls import path
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework.views import APIView
 
-
-class HealthAPIView(APIView):
-    """Simple health check endpoint to verify DRF wiring."""
-
-    permission_classes = [AllowAny]
-
-    # PUBLIC_INTERFACE
-    def get(self, request, *args, **kwargs):
-        """Return a small payload indicating the API is reachable."""
-        return Response({"status": "ok"})
-
+from core.api_views import (
+    AdminCouponDetailAPIView,
+    AdminCouponListCreateAPIView,
+    AdminItemDetailAPIView,
+    AdminItemListCreateAPIView,
+    AdminOrderStatusTransitionAPIView,
+    AdminRefundModerationAPIView,
+    HealthAPIView,
+)
 
 urlpatterns = [
+    # Public/utility
     path("health/", HealthAPIView.as_view(), name="api-health"),
+    # Admin (RBAC enforced via DRF permissions)
+    path("admin/products/", AdminItemListCreateAPIView.as_view(), name="api-admin-products"),
+    path("admin/products/<int:item_id>/", AdminItemDetailAPIView.as_view(), name="api-admin-product-detail"),
+    path("admin/coupons/", AdminCouponListCreateAPIView.as_view(), name="api-admin-coupons"),
+    path("admin/coupons/<int:coupon_id>/", AdminCouponDetailAPIView.as_view(), name="api-admin-coupon-detail"),
+    path(
+        "admin/orders/<int:order_id>/transition/",
+        AdminOrderStatusTransitionAPIView.as_view(),
+        name="api-admin-order-transition",
+    ),
+    path(
+        "admin/refunds/<int:refund_id>/moderate/",
+        AdminRefundModerationAPIView.as_view(),
+        name="api-admin-refund-moderate",
+    ),
 ]
