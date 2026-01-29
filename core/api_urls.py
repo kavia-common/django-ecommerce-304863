@@ -16,7 +16,6 @@ from core.api_views import (
     AdminItemListCreateAPIView,
     AdminOrderStatusTransitionAPIView,
     AdminRefundModerationAPIView,
-    AdminRefundModerationAPIView,
     HealthAPIView,
     MyOrderDetailAPIView,
     MyOrdersListAPIView,

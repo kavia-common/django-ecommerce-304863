@@ -31,7 +31,7 @@ class ProductViewSet(ModelViewSet):
 
     Public:
       - list/retrieve allowed without auth (AllowAny)
-      - list defaults to `is_active=True`
+      - list/retrieve are restricted to active products (`is_active=True`)
 
     Admin:
       - create/update/partial_update/destroy require authenticated admin RBAC
@@ -45,7 +45,7 @@ class ProductViewSet(ModelViewSet):
     queryset = Item.objects.all()
 
     # DRF filter backends (activated globally or per-view; we declare here explicitly)
-    filterset_fields = ["is_active", "category", "label"]
+    filterset_fields = ["is_active", "sku", "category", "label"]
     search_fields = ["title", "sku"]
     ordering_fields = ["price", "title"]
     ordering = ["id"]
@@ -54,13 +54,15 @@ class ProductViewSet(ModelViewSet):
         """
         Apply default filtering rules.
 
-        For public requests (no auth required, list action), we only show active products
-        unless explicitly overridden by admin.
+        For public requests (no auth required), we only show active products for
+        list/retrieve actions. Admins can see all products by default.
         """
         qs = super().get_queryset()
 
-        # Only default-filter for public list. Admins can see all by default.
-        if self.action == "list":
+        # Restrict public list/retrieve to active products.
+        # Note: retrieve() uses get_object() -> get_queryset(), so this also prevents
+        # direct access to inactive items by id for anonymous/non-admin users.
+        if self.action in ("list", "retrieve"):
             user = getattr(self.request, "user", None)
             is_adminish = bool(
                 user
