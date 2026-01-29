@@ -1,6 +1,8 @@
+import importlib.util
 import json
 import logging
 import os
+from importlib import metadata
 
 from decouple import config
 
@@ -59,6 +61,30 @@ validate_settings(
     payment_mode=PAYMENT_MODE,
 )
 
+def _get_crispy_template_pack() -> str:
+    """
+    Determine a crispy template pack that will not crash startup.
+
+    - django-crispy-forms>=2.x requires an external template pack such as
+      crispy-bootstrap4; if it's missing, using "bootstrap4" will typically fail
+      at render time. We fall back to "bootstrap3" as a safe default.
+    - django-crispy-forms<2.x historically shipped template packs internally,
+      including "bootstrap4".
+    """
+    try:
+        crispy_version = metadata.version("django-crispy-forms")
+        major = int(crispy_version.split(".", 1)[0])
+    except Exception:
+        major = 1
+
+    has_bootstrap4_pack = importlib.util.find_spec("crispy_bootstrap4") is not None
+    if major >= 2 and not has_bootstrap4_pack:
+        return "bootstrap3"
+    return "bootstrap4"
+
+
+CRISPY_TEMPLATE_PACK = _get_crispy_template_pack()
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -71,14 +97,16 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "crispy_forms",
-    # Needed for Bootstrap 4 template pack when using crispy-forms>=2.x
-    "crispy_bootstrap4",
     "django_countries",
     # DRF (API layer; does not affect template rendering)
     "rest_framework",
     "django_filters",
     "core",
 ]
+
+# If the bootstrap4 template pack is available, enable it.
+if CRISPY_TEMPLATE_PACK == "bootstrap4" and importlib.util.find_spec("crispy_bootstrap4") is not None:
+    INSTALLED_APPS.append("crispy_bootstrap4")
 
 # Optional CORS support (only enabled if CORS_ALLOWED_ORIGINS is set).
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
@@ -195,8 +223,8 @@ if env_bool("USE_X_FORWARDED_PROTO", default=False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # CRISPY FORMS
-CRISPY_ALLOWED_TEMPLATE_PACKS = ("bootstrap4",)
-CRISPY_TEMPLATE_PACK = "bootstrap4"
+# NOTE: CRISPY_TEMPLATE_PACK is computed above in a startup-safe way.
+CRISPY_ALLOWED_TEMPLATE_PACKS = (CRISPY_TEMPLATE_PACK, "bootstrap3", "bootstrap4", "uni_form")
 
 # Logging (gunicorn-friendly)
 # LOG_FORMAT: text | json
