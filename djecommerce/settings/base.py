@@ -23,6 +23,7 @@ INSTALLED_APPS = [
 
     # DRF (API layer; does not affect template rendering)
     'rest_framework',
+    'django_filters',
 
     'core'
 ]
@@ -90,6 +91,11 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ),
 }
 
