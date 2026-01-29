@@ -21,6 +21,9 @@ INSTALLED_APPS = [
     'crispy_forms',
     'django_countries',
 
+    # DRF (API layer; does not affect template rendering)
+    'rest_framework',
+
     'core'
 ]
 
@@ -76,6 +79,19 @@ AUTHENTICATION_BACKENDS = (
 )
 SITE_ID = 1
 LOGIN_REDIRECT_URL = '/'
+
+# Django REST Framework (DRF)
+# - JWTAuthentication is used for API clients.
+# - SessionAuthentication keeps existing browser-based sessions (django-allauth) working.
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
 
 # CRISPY FORMS
 
