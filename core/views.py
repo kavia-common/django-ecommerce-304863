@@ -19,6 +19,7 @@ from .inventory import (
     release_inventory_reservations_for_order,
     reserve_inventory_for_order,
 )
+from .payment_service import attempt_payment_for_order, PaymentResultCode, get_payment_mode
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -288,31 +289,33 @@ class PaymentView(View):
                     userprofile.one_click_purchasing = True
                     userprofile.save()
 
-            amount = int(order.get_total() * 100)
+            # Service-driven payment attempt (dummy or Stripe).
+            # Idempotency key is stable for (order, user) attempt in this view; safe for retries.
+            idempotency_key = f"checkout-pay:{order.id}"
 
-            try:
+            result = attempt_payment_for_order(
+                order=order,
+                user=self.request.user,
+                amount=order.get_total(),
+                currency="usd",
+                idempotency_key=idempotency_key,
+                stripe_token=None if (use_default or save) else token,
+                stripe_customer_id=userprofile.stripe_customer_id if (use_default or save) else None,
+                extra_metadata={
+                    "source": "template_payment_view",
+                    "save": bool(save),
+                    "use_default": bool(use_default),
+                    "effective_mode": get_payment_mode(),
+                },
+            )
 
-                if use_default or save:
-                    # charge the customer because we cannot charge the token more than once
-                    charge = stripe.Charge.create(
-                        amount=amount,  # cents
-                        currency="usd",
-                        customer=userprofile.stripe_customer_id
-                    )
-                else:
-                    # charge once off on the token
-                    charge = stripe.Charge.create(
-                        amount=amount,  # cents
-                        currency="usd",
-                        source=token
-                    )
+            if result.code == PaymentResultCode.SUCCEEDED and result.payment:
+                payment = result.payment
 
-                # create the payment
-                payment = Payment()
-                payment.stripe_charge_id = charge['id']
-                payment.user = self.request.user
-                payment.amount = order.get_total()
-                payment.save()
+                # Backwards compatibility: keep stripe_charge_id populated for Stripe provider.
+                if payment.provider == "stripe" and payment.provider_reference and not payment.stripe_charge_id:
+                    payment.stripe_charge_id = payment.provider_reference
+                    payment.save(update_fields=["stripe_charge_id"])
 
                 # assign the payment to the order
                 order_items = order.items.all()
@@ -328,108 +331,37 @@ class PaymentView(View):
                 commit_inventory_for_paid_order(
                     order=order,
                     performed_by=self.request.user,
-                    idempotency_key=f"payment:{payment.stripe_charge_id}",
+                    idempotency_key=f"payment:{payment.idempotency_key}",
                 )
 
-                # Keep existing checkout flow intact, but also move the new explicit status forward.
-                # This makes the payment callback idempotent-safe for retries.
+                # Transition explicit lifecycle status
                 try:
                     order.transition_status(
                         target_status=Order.Status.PAID,
                         performed_by=self.request.user,
-                        reason="Payment succeeded (Stripe)",
-                        idempotency_key=f"payment:{payment.stripe_charge_id}",
-                        metadata={"stripe_charge_id": payment.stripe_charge_id},
+                        reason=f"Payment succeeded ({payment.provider})",
+                        idempotency_key=f"payment:{payment.idempotency_key}",
+                        metadata={
+                            "provider": payment.provider,
+                            "mode": payment.mode,
+                            "provider_reference": payment.provider_reference,
+                        },
                     )
                 except Exception:
-                    # Defensive: do not break checkout flow if lifecycle transition fails.
                     order.save()
 
                 messages.success(self.request, "Your order was successful!")
                 return redirect("/")
 
-            except stripe.error.CardError as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:card",
-                    reason="Released reservation due to card error",
-                )
-                body = e.json_body
-                err = body.get('error', {})
-                messages.warning(self.request, f"{err.get('message')}")
-                return redirect("/")
-
-            except stripe.error.RateLimitError as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:ratelimit",
-                    reason="Released reservation due to Stripe rate limit error",
-                )
-                # Too many requests made to the API too quickly
-                messages.warning(self.request, "Rate limit error")
-                return redirect("/")
-
-            except stripe.error.InvalidRequestError as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:invalidrequest",
-                    reason="Released reservation due to Stripe invalid request",
-                )
-                # Invalid parameters were supplied to Stripe's API
-                print(e)
-                messages.warning(self.request, "Invalid parameters")
-                return redirect("/")
-
-            except stripe.error.AuthenticationError as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:auth",
-                    reason="Released reservation due to Stripe authentication error",
-                )
-                # Authentication with Stripe's API failed
-                # (maybe you changed API keys recently)
-                messages.warning(self.request, "Not authenticated")
-                return redirect("/")
-
-            except stripe.error.APIConnectionError as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:apiconnection",
-                    reason="Released reservation due to Stripe API connection error",
-                )
-                # Network communication with Stripe failed
-                messages.warning(self.request, "Network error")
-                return redirect("/")
-
-            except stripe.error.StripeError as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:stripe",
-                    reason="Released reservation due to generic Stripe error",
-                )
-                # Display a very generic error to the user, and maybe send
-                # yourself an email
-                messages.warning(
-                    self.request, "Something went wrong. You were not charged. Please try again.")
-                return redirect("/")
-
-            except Exception as e:
-                release_inventory_reservations_for_order(
-                    order=order,
-                    performed_by=self.request.user,
-                    idempotency_key=f"payment-failed:{order.id}:exception",
-                    reason="Released reservation due to unexpected error",
-                )
-                # send an email to ourselves
-                messages.warning(
-                    self.request, "A serious error occurred. We have been notifed.")
-                return redirect("/")
+            # Failure / invalid request / provider error: release reservations and show message.
+            release_inventory_reservations_for_order(
+                order=order,
+                performed_by=self.request.user,
+                idempotency_key=f"payment-failed:{order.id}:{result.code.lower()}",
+                reason=f"Released reservation due to payment failure ({result.code})",
+            )
+            messages.warning(self.request, result.message or "Payment failed.")
+            return redirect("/")
 
         messages.warning(self.request, "Invalid data received")
         return redirect("/payment/stripe/")

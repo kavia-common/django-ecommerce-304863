@@ -446,13 +446,58 @@ class Address(models.Model):
 
 
 class Payment(models.Model):
-    stripe_charge_id = models.CharField(max_length=50)
+    """
+    Payment record (provider-agnostic).
+
+    Backwards compatibility:
+      - `stripe_charge_id` remains but is deprecated; new code uses `provider_reference`.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SUCCEEDED = "SUCCEEDED", "Succeeded"
+        FAILED = "FAILED", "Failed"
+
+    # Legacy
+    stripe_charge_id = models.CharField(max_length=50, blank=True, null=True)
+
+    # New provider-agnostic fields
+    provider = models.CharField(
+        max_length=24,
+        default="dummy",
+        help_text="Payment provider name (e.g., stripe, dummy).",
+    )
+    mode = models.CharField(
+        max_length=24,
+        default="dummy",
+        help_text="Effective runtime mode used (dummy or stripe).",
+    )
+    provider_reference = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        help_text="Provider charge/intent identifier (id for idempotency/audit).",
+    )
+    idempotency_key = models.CharField(
+        max_length=128,
+        unique=True,
+        help_text="Idempotency key used to safely retry payment attempts.",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    error_message = models.TextField(blank=True, default="")
+    raw_metadata = models.JSONField(blank=True, default=dict)
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, blank=True, null=True)
     amount = models.FloatField()
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.user.username
+        return f"Payment(id={self.id}, user={getattr(self.user, 'username', None)}, amount={self.amount}, status={self.status})"
 
 
 class Coupon(models.Model):

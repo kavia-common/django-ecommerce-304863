@@ -31,6 +31,7 @@ from core.inventory import (
     reserve_inventory_for_order,
     restock_inventory_for_order_refund,
 )
+from core.payment_service import attempt_payment_for_order, get_payment_mode, PaymentResultCode
 
 
 class HealthAPIView(APIView):
@@ -114,6 +115,20 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_total(self, obj) -> float:
         return obj.get_total()
+
+
+class DummyPaymentSimulateSerializer(serializers.Serializer):
+    """
+    Dummy payment simulation payload.
+
+    outcome:
+      - 'success' or 'fail' (optional). If omitted, uses server dummy settings.
+    idempotency_key:
+      - optional, recommended for retry safety.
+    """
+
+    outcome = serializers.ChoiceField(choices=[("success", "success"), ("fail", "fail")], required=False)
+    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
 
 
 class AdminOrderTransitionSerializer(serializers.Serializer):
@@ -420,6 +435,109 @@ class AdminOrderStatusTransitionAPIView(APIView):
                 "order": OrderSerializer(order).data,
                 "transition": OrderStatusHistorySerializer(history).data,
             }
+        )
+
+
+class DummyPaymentSimulateAPIView(APIView):
+    """
+    Customer: simulate a payment intent in dummy mode for the active (un-ordered) order.
+
+    This endpoint is intentionally minimal and only works when PAYMENT_MODE resolves to 'dummy'.
+
+    Response:
+      - 200 with payment result + order id when succeeded/failed.
+      - 400 if not in dummy mode or no active order.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # PUBLIC_INTERFACE
+    def post(self, request, *args, **kwargs):
+        """Simulate payment for current user's active order (dummy mode only)."""
+        if get_payment_mode() != "dummy":
+            return Response(
+                {"detail": "Dummy simulation is only available when payment mode is 'dummy'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        order = Order.objects.filter(user=request.user, ordered=False).order_by("-id").first()
+        if not order:
+            return Response({"detail": "No active order to pay."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ser = DummyPaymentSimulateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        outcome = ser.validated_data.get("outcome")
+        idem = ser.validated_data.get("idempotency_key") or None
+        if idem == "":
+            idem = None
+
+        # Ensure reservation exists (safe/idempotent).
+        try:
+            reserve_inventory_for_order(
+                order=order,
+                performed_by=request.user,
+                idempotency_key=f"api-dummy-reserve:{order.id}:{idem or 'default'}",
+            )
+        except Exception as e:
+            return Response({"detail": f"Unable to reserve inventory: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        result = attempt_payment_for_order(
+            order=order,
+            user=request.user,
+            amount=order.get_total(),
+            currency="usd",
+            idempotency_key=idem or f"api-dummy-pay:{order.id}",
+            dummy_force_outcome=outcome,
+            extra_metadata={"source": "DummyPaymentSimulateAPIView"},
+        )
+
+        if result.code == PaymentResultCode.SUCCEEDED and result.payment:
+            # Commit inventory and transition order to paid.
+            commit_inventory_for_paid_order(
+                order=order,
+                performed_by=request.user,
+                idempotency_key=f"api-dummy-commit:{order.id}:{result.payment.idempotency_key}",
+            )
+            order.ordered = True
+            order.payment = result.payment
+            order.ref_code = order.ref_code or f"api_dummy_{order.id}"
+            try:
+                order.transition_status(
+                    target_status=Order.Status.PAID,
+                    performed_by=request.user,
+                    reason="Payment succeeded (dummy)",
+                    idempotency_key=f"api-dummy-paid:{order.id}:{result.payment.idempotency_key}",
+                    metadata={"payment_id": result.payment.id, "provider_reference": result.provider_reference},
+                )
+            except Exception:
+                order.save()
+
+            return Response(
+                {
+                    "order_id": order.id,
+                    "payment_id": result.payment.id,
+                    "status": "SUCCEEDED",
+                    "provider_reference": result.provider_reference,
+                }
+            )
+
+        # Failure: release inventory reservation and return message.
+        release_inventory_reservations_for_order(
+            order=order,
+            performed_by=request.user,
+            idempotency_key=f"api-dummy-failed:{order.id}:{result.code}",
+            reason="Released reservation due to dummy payment failure",
+        )
+
+        return Response(
+            {
+                "order_id": order.id,
+                "payment_id": result.payment.id if result.payment else None,
+                "status": "FAILED",
+                "code": result.code,
+                "message": result.message,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
 

@@ -99,6 +99,16 @@ REST_FRAMEWORK = {
     ),
 }
 
+# Payments
+# PAYMENT_MODE:
+#   - 'dummy' or 'stripe'
+# If not explicitly set, the system defaults to:
+#   - 'stripe' when STRIPE_SECRET_KEY is configured
+#   - otherwise 'dummy'
+PAYMENT_MODE = config("PAYMENT_MODE", default="").strip() or None
+PAYMENT_DUMMY_OUTCOME = config("PAYMENT_DUMMY_OUTCOME", default="success")  # success|fail|random
+PAYMENT_DUMMY_FAIL_RATE = float(config("PAYMENT_DUMMY_FAIL_RATE", default="0.0"))  # used when outcome=random
+
 # CRISPY FORMS
 
 CRISPY_TEMPLATE_PACK = 'bootstrap4'

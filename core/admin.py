@@ -94,8 +94,24 @@ class InventoryAdjustmentAdmin(admin.ModelAdmin):
 admin.site.register(Item, ItemAdmin)
 admin.site.register(InventoryAdjustment, InventoryAdjustmentAdmin)
 admin.site.register(OrderItem)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "user",
+        "amount",
+        "provider",
+        "mode",
+        "status",
+        "provider_reference",
+        "idempotency_key",
+        "timestamp",
+    ]
+    list_filter = ["provider", "mode", "status", "timestamp"]
+    search_fields = ["user__username", "provider_reference", "idempotency_key", "stripe_charge_id"]
+
+
 admin.site.register(Order, OrderAdmin)
-admin.site.register(Payment)
+admin.site.register(Payment, PaymentAdmin)
 admin.site.register(Coupon)
 admin.site.register(Refund)
 admin.site.register(Address, AddressAdmin)

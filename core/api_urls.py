@@ -16,6 +16,7 @@ from core.api_views import (
     AdminItemListCreateAPIView,
     AdminOrderStatusTransitionAPIView,
     AdminRefundModerationAPIView,
+    DummyPaymentSimulateAPIView,
     HealthAPIView,
     MyOrderDetailAPIView,
     MyOrdersListAPIView,
@@ -47,6 +48,7 @@ urlpatterns = [
     # Customer (JWT/session) endpoints
     path("me/orders/", MyOrdersListAPIView.as_view(), name="api-my-orders"),
     path("me/orders/<int:order_id>/", MyOrderDetailAPIView.as_view(), name="api-my-order-detail"),
+    path("me/payments/dummy/simulate/", DummyPaymentSimulateAPIView.as_view(), name="api-dummy-payment-simulate"),
     # Admin (RBAC enforced via DRF permissions)
     path("admin/coupons/", AdminCouponListCreateAPIView.as_view(), name="api-admin-coupons"),
     path("admin/coupons/<int:coupon_id>/", AdminCouponDetailAPIView.as_view(), name="api-admin-coupon-detail"),
