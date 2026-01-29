@@ -139,6 +139,103 @@ class CouponSummarySerializer(serializers.ModelSerializer):
         fields = ["id", "code", "amount"]
 
 
+class AdminCouponSerializer(serializers.ModelSerializer):
+    """Admin serializer for managing coupons."""
+
+    class Meta:
+        model = Coupon
+        fields = ["id", "code", "amount"]
+
+
+# -------------------------
+# Admin coupon endpoints
+# -------------------------
+
+
+class AdminCouponListCreateAPIView(APIView):
+    """
+    Admin: list and create coupons.
+
+    Routes:
+      - GET  /api/admin/coupons/
+      - POST /api/admin/coupons/
+
+    Permissions:
+      - Admin group OR Django permissions:
+        - core.view_coupon for GET
+        - core.add_coupon for POST
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
+    required_django_perms = ("core.view_coupon", "core.add_coupon")
+
+    # PUBLIC_INTERFACE
+    def get(self, request, *args, **kwargs):
+        """List coupons (admin)."""
+        coupons = Coupon.objects.all().order_by("-id")
+        return Response(AdminCouponSerializer(coupons, many=True).data)
+
+    # PUBLIC_INTERFACE
+    def post(self, request, *args, **kwargs):
+        """Create a coupon (admin)."""
+        ser = AdminCouponSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        coupon = ser.save()
+        return Response(AdminCouponSerializer(coupon).data, status=status.HTTP_201_CREATED)
+
+
+class AdminCouponDetailAPIView(APIView):
+    """
+    Admin: retrieve/update/delete a coupon.
+
+    Routes:
+      - GET    /api/admin/coupons/{coupon_id}/
+      - PUT    /api/admin/coupons/{coupon_id}/
+      - PATCH  /api/admin/coupons/{coupon_id}/
+      - DELETE /api/admin/coupons/{coupon_id}/
+
+    Permissions:
+      - Admin group OR Django permissions:
+        - core.view_coupon for GET
+        - core.change_coupon for PUT/PATCH
+        - core.delete_coupon for DELETE
+    """
+
+    permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
+    required_django_perms = ("core.view_coupon", "core.change_coupon", "core.delete_coupon")
+
+    # PUBLIC_INTERFACE
+    def get(self, request, coupon_id: int, *args, **kwargs):
+        """Retrieve a coupon (admin)."""
+        coupon = get_object_or_404(Coupon, pk=coupon_id)
+        return Response(AdminCouponSerializer(coupon).data)
+
+    # PUBLIC_INTERFACE
+    def put(self, request, coupon_id: int, *args, **kwargs):
+        """Replace a coupon (admin)."""
+        coupon = get_object_or_404(Coupon, pk=coupon_id)
+        ser = AdminCouponSerializer(instance=coupon, data=request.data)
+        ser.is_valid(raise_exception=True)
+        coupon = ser.save()
+        return Response(AdminCouponSerializer(coupon).data)
+
+    # PUBLIC_INTERFACE
+    def patch(self, request, coupon_id: int, *args, **kwargs):
+        """Partially update a coupon (admin)."""
+        coupon = get_object_or_404(Coupon, pk=coupon_id)
+        ser = AdminCouponSerializer(instance=coupon, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        coupon = ser.save()
+        return Response(AdminCouponSerializer(coupon).data)
+
+    # PUBLIC_INTERFACE
+    def delete(self, request, coupon_id: int, *args, **kwargs):
+        """Delete a coupon (admin)."""
+        coupon = get_object_or_404(Coupon, pk=coupon_id)
+        coupon.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class OrderItemSerializer(serializers.ModelSerializer):
     """OrderItem serializer embedding an item summary and pricing totals."""
 
