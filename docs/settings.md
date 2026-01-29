@@ -20,8 +20,9 @@ Production settings are hardened and validated at import time to fail fast when 
 ## Hosts / CSRF / CORS
 
 - `ALLOWED_HOSTS`
-  - Accepts JSON list or comma-separated list.
+  - Accepts JSON list or comma/whitespace-separated list.
   - Example: `ALLOWED_HOSTS=example.com,.example-preview.com`
+  - Production validation: must not be empty and must not contain `*`.
 
 - `PREVIEW_ALLOWED_HOST_SUFFIXES` (optional)
   - List of suffixes to allow wildcard subdomains safely.
@@ -47,6 +48,13 @@ Defaults are secure-on when `ENVIRONMENT=production`:
 - `SESSION_COOKIE_SECURE` (default: `True` in production)
 - `CSRF_COOKIE_SECURE` (default: `True` in production)
 
+Cookie hardening (optional overrides):
+
+- `SESSION_COOKIE_SAMESITE` (default: `Lax`)
+- `CSRF_COOKIE_SAMESITE` (default: `Lax`)
+- `SESSION_COOKIE_HTTPONLY` (default: `True`)
+- `CSRF_COOKIE_HTTPONLY` (default: `False`)
+
 Reverse proxy support:
 
 - `USE_X_FORWARDED_PROTO` (default: `False`)
@@ -70,9 +78,9 @@ Reverse proxy support:
 - `PAYMENT_MODE` (default: `dummy`)
   - `dummy` (default) does not require Stripe keys.
   - `stripe` will use Stripe keys if present.
+  - Production validation: if `PAYMENT_MODE=stripe`, Stripe keys become required.
 
-Stripe keys (required only when `PAYMENT_MODE=stripe`):
+Stripe keys (required only when `PAYMENT_MODE=stripe` in production):
 
 - `STRIPE_SECRET_KEY`
 - `STRIPE_PUBLIC_KEY`
-"""

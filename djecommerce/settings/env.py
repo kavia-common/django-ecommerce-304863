@@ -95,13 +95,66 @@ def require_env(name: str, *, hint: str = "") -> str:
     return value
 
 
-def validate_settings(*, debug: bool, environment: str) -> None:
+def _validate_production_hosts(*, allowed_hosts: List[str]) -> None:
+    """
+    Ensure ALLOWED_HOSTS is explicitly set to something safer than wildcard.
+
+    In production, we disallow:
+    - empty list (would break requests)
+    - "*" wildcard (too permissive for a typical deployment)
+    """
+    normalized = [str(h).strip() for h in (allowed_hosts or []) if str(h).strip()]
+    if not normalized:
+        raise ImproperlyConfigured("ALLOWED_HOSTS must not be empty in production.")
+    if "*" in normalized:
+        raise ImproperlyConfigured("ALLOWED_HOSTS must not contain '*' in production.")
+
+
+def _validate_payment_mode(*, payment_mode: str) -> str:
+    """
+    Validate and normalize payment mode.
+
+    Allowed:
+    - dummy (default)
+    - stripe
+    """
+    mode = (payment_mode or "dummy").strip().lower()
+    if mode not in {"dummy", "stripe"}:
+        raise ImproperlyConfigured("PAYMENT_MODE must be one of: dummy, stripe.")
+    return mode
+
+
+# PUBLIC_INTERFACE
+def validate_settings(
+    *,
+    debug: bool,
+    environment: str,
+    allowed_hosts: Optional[List[str]] = None,
+    payment_mode: Optional[str] = None,
+) -> None:
     """
     Validate key settings at import time (fail fast).
 
-    Rules implemented per request:
-    - DEBUG defaults to False and must not be True outside local/dev environments.
+    Parameters
+    ----------
+    debug:
+        Django DEBUG flag.
+    environment:
+        Deployment environment selector. Typically: local | development | production
+    allowed_hosts:
+        The computed ALLOWED_HOSTS list (optional). When provided and environment=production,
+        we validate it isn't empty or wildcard.
+    payment_mode:
+        The configured payment mode (optional). When provided and in production, we can
+        enforce required keys for stripe mode.
+
+    Validation Rules
+    ----------------
+    - DEBUG must not be True outside local/dev environments.
     - SECRET_KEY is required for production.
+    - In production:
+        - ALLOWED_HOSTS must be non-empty and must not contain '*'
+        - If PAYMENT_MODE=stripe: STRIPE_PUBLIC_KEY and STRIPE_SECRET_KEY are required
     """
     env_norm = (environment or "").strip().lower()
 
@@ -110,9 +163,18 @@ def validate_settings(*, debug: bool, environment: str) -> None:
             "DEBUG=True is not allowed in non-local environments. "
             "Set DEBUG=False and ensure secure settings are enabled."
         )
+
     if env_norm == "production":
-        # Keep requirement strict: SECRET_KEY must be present.
         require_env(
             "SECRET_KEY",
             hint="Generate a strong secret key and set it in your environment.",
         )
+
+        if allowed_hosts is not None:
+            _validate_production_hosts(allowed_hosts=allowed_hosts)
+
+        if payment_mode is not None:
+            mode = _validate_payment_mode(payment_mode=payment_mode)
+            if mode == "stripe":
+                require_env("STRIPE_SECRET_KEY", hint="Required when PAYMENT_MODE=stripe.")
+                require_env("STRIPE_PUBLIC_KEY", hint="Required when PAYMENT_MODE=stripe.")

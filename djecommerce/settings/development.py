@@ -1,7 +1,14 @@
+import os
+
 from .base import *  # noqa
 
 DEBUG = True
-validate_settings(debug=DEBUG, environment=ENVIRONMENT)
+validate_settings(
+    debug=DEBUG,
+    environment=ENVIRONMENT,
+    allowed_hosts=ALLOWED_HOSTS,
+    payment_mode=PAYMENT_MODE,
+)
 
 # Allow override via env, but default to local loopback.
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])

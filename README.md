@@ -70,7 +70,7 @@ Now you can run the project with this command
 python manage.py runserver
 ```
 
-**Note** if you want payments to work you will need to enter your own Stripe API keys into the `.env` file in the settings files.
+**Note** payments default to `dummy` mode (no Stripe keys required). To use Stripe, set `PAYMENT_MODE=stripe` and provide `STRIPE_PUBLIC_KEY` and `STRIPE_SECRET_KEY` (see `docs/settings.md`).
 
 ---
 

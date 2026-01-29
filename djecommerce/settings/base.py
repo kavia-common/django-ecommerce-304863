@@ -15,10 +15,9 @@ ENVIRONMENT = env_str("ENVIRONMENT", default="local")
 
 # DEBUG defaults to False (safer), but development.py still explicitly sets DEBUG=True.
 DEBUG = env_bool("DEBUG", default=False)
-validate_settings(debug=DEBUG, environment=ENVIRONMENT)
 
 # SECRET_KEY
-# In production this is required (validated above).
+# In production this is required (validated below).
 # In local/dev we keep a safe placeholder default to avoid breaking quick starts.
 SECRET_KEY = env_str("SECRET_KEY", default="insecure-local-secret-key-change-me")
 
@@ -40,6 +39,26 @@ for sfx in preview_suffixes:
     if sfx not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(sfx)
 
+# Payments
+# PAYMENT_MODE:
+#   - 'dummy' (default) or 'stripe'
+# Stripe keys are optional unless PAYMENT_MODE=stripe (enforced in production validation).
+PAYMENT_MODE = (env_str("PAYMENT_MODE", default="dummy") or "dummy").strip().lower()
+PAYMENT_DUMMY_OUTCOME = config("PAYMENT_DUMMY_OUTCOME", default="success")  # success|fail|random
+PAYMENT_DUMMY_FAIL_RATE = float(config("PAYMENT_DUMMY_FAIL_RATE", default="0.0"))  # used when outcome=random
+
+# Stripe keys are read here; production enforcement happens in validate_settings() when mode=stripe.
+STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="")
+STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="")
+
+# Validate key configuration (fail-fast)
+validate_settings(
+    debug=DEBUG,
+    environment=ENVIRONMENT,
+    allowed_hosts=ALLOWED_HOSTS,
+    payment_mode=PAYMENT_MODE,
+)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -60,7 +79,6 @@ INSTALLED_APPS = [
 ]
 
 # Optional CORS support (only enabled if CORS_ALLOWED_ORIGINS is set).
-# We do not add new dependencies unless required by env.
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ENABLED = bool(CORS_ALLOWED_ORIGINS)
 
@@ -151,6 +169,13 @@ _secure_defaults = (ENVIRONMENT or "").strip().lower() == "production"
 
 SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=_secure_defaults)
 CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=_secure_defaults)
+
+# Harden cookie behavior in production; allow overrides if needed.
+SESSION_COOKIE_HTTPONLY = env_bool("SESSION_COOKIE_HTTPONLY", default=True)
+CSRF_COOKIE_HTTPONLY = env_bool("CSRF_COOKIE_HTTPONLY", default=False)  # Django default is False
+SESSION_COOKIE_SAMESITE = env_str("SESSION_COOKIE_SAMESITE", default="Lax")
+CSRF_COOKIE_SAMESITE = env_str("CSRF_COOKIE_SAMESITE", default="Lax")
+
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=_secure_defaults)
 
 # HSTS
@@ -158,31 +183,14 @@ SECURE_HSTS_SECONDS = int(env_str("SECURE_HSTS_SECONDS", default=str(31536000 if
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=_secure_defaults)
 SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", default=_secure_defaults)
 
+# Additional security headers
+SECURE_CONTENT_TYPE_NOSNIFF = env_bool("SECURE_CONTENT_TYPE_NOSNIFF", default=_secure_defaults)
+SECURE_REFERRER_POLICY = env_str("SECURE_REFERRER_POLICY", default="same-origin")
+
 # Proxy SSL header (common with gunicorn behind reverse proxy/load balancer)
 # Leave opt-in to avoid surprises for local dev.
 if env_bool("USE_X_FORWARDED_PROTO", default=False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-# Payments
-# PAYMENT_MODE:
-#   - 'dummy' or 'stripe'
-# If not explicitly set, the system defaults to:
-#   - 'stripe' when STRIPE_SECRET_KEY is configured
-#   - otherwise 'dummy'
-PAYMENT_MODE = config("PAYMENT_MODE", default="").strip() or None
-PAYMENT_DUMMY_OUTCOME = config("PAYMENT_DUMMY_OUTCOME", default="success")  # success|fail|random
-PAYMENT_DUMMY_FAIL_RATE = float(config("PAYMENT_DUMMY_FAIL_RATE", default="0.0"))  # used when outcome=random
-
-# Stripe key requirement:
-# - By default the app should run in dummy mode unless Stripe keys are present and mode==stripe.
-# - Only require Stripe keys when PAYMENT_MODE=stripe.
-_mode = (env_str("PAYMENT_MODE", default="dummy") or "dummy").strip().lower()
-if _mode == "stripe":
-    STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="")
-    STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="")
-else:
-    STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="")
-    STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="")
 
 # CRISPY FORMS
 CRISPY_TEMPLATE_PACK = "bootstrap4"
