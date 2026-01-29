@@ -37,7 +37,7 @@ class Migration(migrations.Migration):
                     models.UniqueConstraint(fields=("user", "item"), name="uniq_review_user_item"),
                 ],
                 "indexes": [
-                    models.Index(fields=["item", "is_approved", "created_at"], name="idx_review_item_approved_created"),
+                    models.Index(fields=["item", "is_approved", "created_at"], name="idx_review_item_appr_created"),
                     models.Index(fields=["user", "created_at"], name="idx_review_user_created"),
                 ],
             },

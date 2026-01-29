@@ -160,6 +160,10 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
+# Default primary key field type
+# Keep AutoField to match existing migrations and avoid warnings on Django 4.x.
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
