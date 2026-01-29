@@ -1,103 +1,167 @@
+import json
+import logging
 import os
+
 from decouple import config
 
-BASE_DIR = os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))))
+from .env import env_bool, env_list, env_str, validate_settings
 
-SECRET_KEY = config('SECRET_KEY')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Environment
+# ENVIRONMENT is used to gate production hardening behavior.
+# Supported values: local | development | production (others treated as non-local).
+ENVIRONMENT = env_str("ENVIRONMENT", default="local")
+
+# DEBUG defaults to False (safer), but development.py still explicitly sets DEBUG=True.
+DEBUG = env_bool("DEBUG", default=False)
+validate_settings(debug=DEBUG, environment=ENVIRONMENT)
+
+# SECRET_KEY
+# In production this is required (validated above).
+# In local/dev we keep a safe placeholder default to avoid breaking quick starts.
+SECRET_KEY = env_str("SECRET_KEY", default="insecure-local-secret-key-change-me")
+
+# Hosts
+# ALLOWED_HOSTS can be a JSON list or comma-separated.
+# In local/dev we default to localhost.
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
+
+# Allow safe preview host patterns (optional).
+# Example: PREVIEW_ALLOWED_HOST_SUFFIXES=.kavia.app,.vercel.app
+# This will match any subdomain ending with the suffix (leading dot is normalized).
+preview_suffixes = env_list("PREVIEW_ALLOWED_HOST_SUFFIXES", default=[])
+for sfx in preview_suffixes:
+    sfx = sfx.strip()
+    if not sfx:
+        continue
+    if not sfx.startswith("."):
+        sfx = f".{sfx}"
+    if sfx not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(sfx)
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-
-    'django.contrib.sites',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-    'crispy_forms',
-    'django_countries',
-
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.sites",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "crispy_forms",
+    "django_countries",
     # DRF (API layer; does not affect template rendering)
-    'rest_framework',
-    'django_filters',
-
-    'core'
+    "rest_framework",
+    "django_filters",
+    "core",
 ]
+
+# Optional CORS support (only enabled if CORS_ALLOWED_ORIGINS is set).
+# We do not add new dependencies unless required by env.
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ENABLED = bool(CORS_ALLOWED_ORIGINS)
+
+if CORS_ENABLED:
+    INSTALLED_APPS = ["corsheaders"] + INSTALLED_APPS
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
 ]
 
-ROOT_URLCONF = 'djecommerce.urls'
+if CORS_ENABLED:
+    # Must be as high as possible per django-cors-headers docs.
+    MIDDLEWARE += ["corsheaders.middleware.CorsMiddleware"]
+
+MIDDLEWARE += [
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+ROOT_URLCONF = "djecommerce.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'templates')],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [os.path.join(BASE_DIR, "templates")],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'djecommerce.wsgi.application'
+WSGI_APPLICATION = "djecommerce.wsgi.application"
 
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-
-STATIC_URL = '/static/'
-MEDIA_URL = '/media/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static_in_env')]
-STATIC_ROOT = os.path.join(BASE_DIR, 'static_root')
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media_root')
+STATIC_URL = "/static/"
+MEDIA_URL = "/media/"
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static_in_env")]
+STATIC_ROOT = os.path.join(BASE_DIR, "static_root")
+MEDIA_ROOT = os.path.join(BASE_DIR, "media_root")
 
 # Auth
-
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend'
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
 )
 SITE_ID = 1
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = "/"
 
 # Django REST Framework (DRF)
 # - JWTAuthentication is used for API clients.
 # - SessionAuthentication keeps existing browser-based sessions (django-allauth) working.
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ),
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.IsAuthenticated',
-    ),
-    'DEFAULT_FILTER_BACKENDS': (
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
     ),
 }
+
+# CSRF/CORS (optional)
+# Values should be full origins (scheme+host), e.g. https://example.com
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", default=[])
+
+# Secure defaults
+# Secure-by-default in production; configurable via env vars.
+_secure_defaults = (ENVIRONMENT or "").strip().lower() == "production"
+
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", default=_secure_defaults)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=_secure_defaults)
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=_secure_defaults)
+
+# HSTS
+SECURE_HSTS_SECONDS = int(env_str("SECURE_HSTS_SECONDS", default=str(31536000 if _secure_defaults else 0)))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=_secure_defaults)
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", default=_secure_defaults)
+
+# Proxy SSL header (common with gunicorn behind reverse proxy/load balancer)
+# Leave opt-in to avoid surprises for local dev.
+if env_bool("USE_X_FORWARDED_PROTO", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Payments
 # PAYMENT_MODE:
@@ -109,6 +173,71 @@ PAYMENT_MODE = config("PAYMENT_MODE", default="").strip() or None
 PAYMENT_DUMMY_OUTCOME = config("PAYMENT_DUMMY_OUTCOME", default="success")  # success|fail|random
 PAYMENT_DUMMY_FAIL_RATE = float(config("PAYMENT_DUMMY_FAIL_RATE", default="0.0"))  # used when outcome=random
 
-# CRISPY FORMS
+# Stripe key requirement:
+# - By default the app should run in dummy mode unless Stripe keys are present and mode==stripe.
+# - Only require Stripe keys when PAYMENT_MODE=stripe.
+_mode = (env_str("PAYMENT_MODE", default="dummy") or "dummy").strip().lower()
+if _mode == "stripe":
+    STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="")
+    STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="")
+else:
+    STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="")
+    STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="")
 
-CRISPY_TEMPLATE_PACK = 'bootstrap4'
+# CRISPY FORMS
+CRISPY_TEMPLATE_PACK = "bootstrap4"
+
+# Logging (gunicorn-friendly)
+# LOG_FORMAT: text | json
+LOG_LEVEL = env_str("LOG_LEVEL", default="INFO").upper()
+LOG_FORMAT = env_str("LOG_FORMAT", default="text").lower()
+
+
+class _JsonFormatter(logging.Formatter):
+    """Minimal JSON formatter to avoid external dependencies."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "text": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+        "json": {
+            "()": _JsonFormatter,
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json" if LOG_FORMAT == "json" else "text",
+            "level": LOG_LEVEL,
+        }
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        # Reduce noisy loggers
+        "django.server": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        # Log DRF/auth issues at warning+
+        "rest_framework": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "rest_framework.authentication": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "rest_framework.permissions": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "django.db.backends": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+    },
+}
