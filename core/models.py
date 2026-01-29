@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.db.models.signals import post_save
 from django.shortcuts import reverse
@@ -552,6 +553,57 @@ class Refund(models.Model):
 
     def __str__(self):
         return f"{self.pk}"
+
+
+class Review(models.Model):
+    """
+    Product review written by a user for an item.
+
+    Moderation model:
+      - Newly created reviews default to is_approved=False and are not publicly visible.
+      - If a user edits their own approved review via the API, it is set back to unapproved
+        (requires re-moderation). Admins can edit without auto-unapproving via a dedicated
+        moderation action.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="Rating from 1 to 5.",
+    )
+    title = models.CharField(max_length=120, blank=True, null=True)
+    body = models.TextField()
+
+    is_approved = models.BooleanField(
+        default=False,
+        help_text="If false, the review is hidden from public endpoints until moderated.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_review_user_item"),
+        ]
+        indexes = [
+            models.Index(fields=["item", "is_approved", "created_at"], name="idx_review_item_approved_created"),
+            models.Index(fields=["user", "created_at"], name="idx_review_user_created"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Review(user={self.user_id}, item={self.item_id}, rating={self.rating}, approved={self.is_approved})"
 
 
 def userprofile_receiver(sender, instance, created, *args, **kwargs):

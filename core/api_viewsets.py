@@ -24,13 +24,23 @@ Wishlist:
 from __future__ import annotations
 
 from django.db import IntegrityError, transaction
+from django.db.models import Avg, Count, Q
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet, ViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet, ViewSet
 
-from core.api_serializers import ProductSerializer, WishlistAddSerializer, WishlistItemSerializer
-from core.models import Item, WishlistItem
+from core.api_serializers import (
+    ProductSerializer,
+    ReviewAdminSerializer,
+    ReviewModerationSerializer,
+    ReviewPublicSerializer,
+    ReviewWriteSerializer,
+    WishlistAddSerializer,
+    WishlistItemSerializer,
+)
+from core.models import Item, Review, WishlistItem
 from core.permissions import IsAdminGroupOrDjangoPermission
 
 
@@ -48,6 +58,11 @@ class ProductViewSet(ModelViewSet):
     Search / ordering:
       - Search by title and sku (case-insensitive)
       - Ordering by price/title (also supports -price, -title)
+
+    Reviews:
+      - Exposes aggregate stats (average_rating, review_count) derived from approved reviews.
+      - Nested endpoint:
+          GET /api/products/{id}/reviews/  (approved-only, read-only)
     """
 
     serializer_class = ProductSerializer
@@ -65,13 +80,20 @@ class ProductViewSet(ModelViewSet):
 
         For public requests (no auth required), we only show active products for
         list/retrieve actions. Admins can see all products by default.
+
+        Also annotates approved review aggregates to avoid N+1 on list endpoints.
         """
         qs = super().get_queryset()
+
+        qs = qs.annotate(
+            average_rating=Avg("reviews__rating", filter=Q(reviews__is_approved=True)),
+            review_count=Count("reviews__id", filter=Q(reviews__is_approved=True), distinct=True),
+        )
 
         # Restrict public list/retrieve to active products.
         # Note: retrieve() uses get_object() -> get_queryset(), so this also prevents
         # direct access to inactive items by id for anonymous/non-admin users.
-        if self.action in ("list", "retrieve"):
+        if self.action in ("list", "retrieve", "reviews"):
             user = getattr(self.request, "user", None)
             is_adminish = bool(
                 user
@@ -82,6 +104,41 @@ class ProductViewSet(ModelViewSet):
                 qs = qs.filter(is_active=True)
 
         return qs
+
+    # PUBLIC_INTERFACE
+    @action(
+        detail=True,
+        methods=["get"],
+        permission_classes=[AllowAny],
+        url_path="reviews",
+    )
+    def reviews(self, request, pk=None):
+        """
+        List approved reviews for a specific product.
+
+        Route:
+          GET /api/products/{id}/reviews/
+
+        Notes:
+          - Only approved reviews are returned.
+          - This is public read-only.
+        """
+        item = self.get_object()
+        qs = Review.objects.filter(item=item, is_approved=True).select_related("user", "item").order_by("-created_at", "-id")
+
+        # Basic DRF pagination support.
+        page = getattr(self, "paginator", None)
+        if page is None:
+            from rest_framework.pagination import PageNumberPagination
+
+            self.paginator = PageNumberPagination()
+            page = self.paginator
+
+        paged = page.paginate_queryset(qs, request, view=self)
+        serializer = ReviewPublicSerializer(paged if paged is not None else qs, many=True)
+        if paged is not None:
+            return page.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     def get_permissions(self):
         """

@@ -9,6 +9,7 @@ from .models import (
     OrderItem,
     Payment,
     Refund,
+    Review,
     UserProfile,
     WishlistItem,
 )
@@ -134,3 +135,29 @@ class WishlistItemAdmin(admin.ModelAdmin):
 
 
 admin.site.register(WishlistItem, WishlistItemAdmin)
+
+
+def approve_reviews(modeladmin, request, queryset):
+    queryset.update(is_approved=True)
+
+
+approve_reviews.short_description = "Approve selected reviews"
+
+
+def reject_reviews(modeladmin, request, queryset):
+    queryset.update(is_approved=False)
+
+
+reject_reviews.short_description = "Reject selected reviews"
+
+
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ["id", "item", "user", "rating", "is_approved", "created_at", "updated_at"]
+    list_filter = ["is_approved", "rating", "created_at"]
+    search_fields = ["user__username", "user__email", "item__title", "item__sku", "title", "body"]
+    ordering = ["-created_at", "-id"]
+    actions = [approve_reviews, reject_reviews]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+admin.site.register(Review, ReviewAdmin)

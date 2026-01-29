@@ -23,10 +23,12 @@ from core.api_views import (
     PublicItemDetailAPIView,
     PublicItemListAPIView,
 )
+from core.reviews_viewset import ReviewViewSet
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="products")
 router.register(r"wishlist", WishlistViewSet, basename="wishlist")
+router.register(r"reviews", ReviewViewSet, basename="reviews")
 
 urlpatterns = [
     # Utility
