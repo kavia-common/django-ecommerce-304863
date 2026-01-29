@@ -8,7 +8,7 @@ we can evolve an API surface (JWT/DRF) without impacting existing UI routes.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from core.api_viewsets import ProductViewSet
+from core.api_viewsets import ProductViewSet, WishlistViewSet
 from core.api_views import (
     AdminCouponDetailAPIView,
     AdminCouponListCreateAPIView,
@@ -26,6 +26,7 @@ from core.api_views import (
 
 router = DefaultRouter()
 router.register(r"products", ProductViewSet, basename="products")
+router.register(r"wishlist", WishlistViewSet, basename="wishlist")
 
 urlpatterns = [
     # Utility

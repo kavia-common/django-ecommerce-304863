@@ -10,6 +10,7 @@ from .models import (
     Payment,
     Refund,
     UserProfile,
+    WishlistItem,
 )
 
 
@@ -116,3 +117,20 @@ admin.site.register(Coupon)
 admin.site.register(Refund)
 admin.site.register(Address, AddressAdmin)
 admin.site.register(UserProfile)
+
+
+class WishlistItemAdmin(admin.ModelAdmin):
+    list_display = ["user", "item", "created_at"]
+    list_filter = ["created_at"]
+    search_fields = ["user__username", "user__email", "item__title", "item__sku", "item__slug"]
+    ordering = ["-created_at", "-id"]
+    readonly_fields = ["user", "item", "created_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+admin.site.register(WishlistItem, WishlistItemAdmin)

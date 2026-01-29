@@ -13,15 +13,24 @@ Additional behavior:
 - Public list is filtered to active products by default.
 - Search/filter on title and SKU.
 - Ordering by price/title.
+
+Wishlist:
+- JWT-protected endpoints:
+  - GET /api/wishlist/
+  - POST /api/wishlist/ {"item_id": <id>}
+  - DELETE /api/wishlist/{item_id}/
 """
 
 from __future__ import annotations
 
+from django.db import IntegrityError, transaction
+from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet, ViewSet
 
-from core.api_serializers import ProductSerializer
-from core.models import Item
+from core.api_serializers import ProductSerializer, WishlistAddSerializer, WishlistItemSerializer
+from core.models import Item, WishlistItem
 from core.permissions import IsAdminGroupOrDjangoPermission
 
 
@@ -95,3 +104,91 @@ class ProductViewSet(ModelViewSet):
         "core.delete_item",
         "core.view_item",
     )
+
+
+class WishlistViewSet(ViewSet):
+    """
+    Wishlist endpoints for the current authenticated user.
+
+    Routes (mounted via DefaultRouter):
+      - GET    /api/wishlist/               list
+      - POST   /api/wishlist/               create   body: {"item_id": <id>}
+      - DELETE /api/wishlist/{item_id}/     destroy  (idempotent)
+
+    Notes:
+      - This API is *user-scoped*: users can only see/mutate their own wishlist.
+      - create is idempotent: if the item is already wishlisted, returns 200 OK.
+      - destroy is idempotent: removing a non-existent entry returns 204 No Content.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _base_queryset(self):
+        """
+        Base queryset scoped to the current user, optimized for list rendering.
+        """
+        return (
+            WishlistItem.objects.filter(user=self.request.user)
+            .select_related("item")
+            .order_by("-created_at", "-id")
+        )
+
+    # PUBLIC_INTERFACE
+    def list(self, request):
+        """List the current user's wishlist items (paginated)."""
+        qs = self._base_queryset()
+
+        # Use DRF paginator from generic API stack without converting to GenericViewSet
+        # (we keep this ViewSet minimal but still paginated).
+        page = getattr(self, "paginator", None)
+        if page is None:
+            # Lazy-init paginator using DRF's default pagination class (if configured).
+            from rest_framework.pagination import PageNumberPagination
+
+            self.paginator = PageNumberPagination()
+            page = self.paginator
+
+        paged = page.paginate_queryset(qs, request, view=self)
+        serializer = WishlistItemSerializer(paged if paged is not None else qs, many=True)
+        if paged is not None:
+            return page.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    # PUBLIC_INTERFACE
+    def create(self, request):
+        """Add an item to the current user's wishlist (idempotent)."""
+        input_serializer = WishlistAddSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        item_id = input_serializer.validated_data["item_id"]
+
+        # Ensure item exists (404 if not).
+        item = Item.objects.filter(pk=item_id).first()
+        if not item:
+            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Idempotent insert; safe under concurrency.
+        try:
+            with transaction.atomic():
+                obj, created = WishlistItem.objects.get_or_create(user=request.user, item=item)
+        except IntegrityError:
+            # In case of race, fetch the existing record.
+            obj = WishlistItem.objects.get(user=request.user, item=item)
+            created = False
+
+        payload = WishlistItemSerializer(obj).data
+        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    # PUBLIC_INTERFACE
+    def destroy(self, request, pk=None):
+        """
+        Remove an item from the current user's wishlist (idempotent).
+
+        Router passes {pk}; we mount this as /api/wishlist/{item_id}/
+        """
+        try:
+            item_id = int(pk)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid item id."}, status=status.HTTP_400_BAD_REQUEST)
+
+        WishlistItem.objects.filter(user=request.user, item_id=item_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

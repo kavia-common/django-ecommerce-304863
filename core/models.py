@@ -119,6 +119,42 @@ class Item(models.Model):
         )
 
 
+class WishlistItem(models.Model):
+    """
+    Wishlist through model: a user wishes for a given Item.
+
+    This is intentionally separate from cart/order concerns. It is used by the API:
+      - GET /api/wishlist/
+      - POST /api/wishlist/ {item_id}
+      - DELETE /api/wishlist/{item_id}/
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wishlist_items",
+    )
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="wishlisted_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_wishlist_user_item")
+        ]
+        indexes = [
+            models.Index(fields=["user", "item"], name="idx_wishlist_user_item"),
+            models.Index(fields=["user", "created_at"], name="idx_wishlist_user_created"),
+        ]
+
+    def __str__(self) -> str:
+        return f"WishlistItem(user={self.user_id}, item={self.item_id})"
+
+
 class InventoryAdjustment(models.Model):
     """
     Audit log of inventory deltas for an item.
