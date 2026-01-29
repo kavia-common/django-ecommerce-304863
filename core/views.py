@@ -481,8 +481,13 @@ def remove_single_item_from_cart(request, slug):
 
 
 def get_coupon(request, code):
+    """
+    Legacy helper retained for template flow; now performs case-insensitive lookup.
+
+    Note: Real validation (windows/limits/min spend) happens in Coupon.apply_to_order.
+    """
     try:
-        coupon = Coupon.objects.get(code=code)
+        coupon = Coupon.objects.get(code__iexact=code.strip())
         return coupon
     except ObjectDoesNotExist:
         messages.info(request, "This coupon does not exist")
@@ -494,11 +499,23 @@ class AddCouponView(View):
         form = CouponForm(self.request.POST or None)
         if form.is_valid():
             try:
-                code = form.cleaned_data.get('code')
-                order = Order.objects.get(
-                    user=self.request.user, ordered=False)
-                order.coupon = get_coupon(self.request, code)
-                order.save()
+                code = form.cleaned_data.get("code")
+                order = Order.objects.get(user=self.request.user, ordered=False)
+
+                coupon = get_coupon(self.request, code)
+                if not isinstance(coupon, Coupon):
+                    return redirect("core:checkout")
+
+                ok, msg, _redemption = coupon.apply_to_order(
+                    user=self.request.user,
+                    order=order,
+                    # Stable idempotency key for template flow: same order + coupon code.
+                    idempotency_key=f"tpl-apply:{order.id}:{coupon.code}",
+                )
+                if not ok:
+                    messages.warning(self.request, msg)
+                    return redirect("core:checkout")
+
                 messages.success(self.request, "Successfully added coupon")
                 return redirect("core:checkout")
             except ObjectDoesNotExist:
