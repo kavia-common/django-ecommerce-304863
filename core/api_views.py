@@ -13,9 +13,25 @@ RBAC strategy:
   - IsAuthenticated + Admin group OR required Django model permissions
 
 We use Django's built-in Groups/Permissions system (see migration 0005_...).
+
+Order API requirements implemented here:
+- User:
+  - GET /api/orders/active/             active cart / checkout summary
+  - GET /api/orders/                   list user's orders
+  - GET /api/orders/{id}/              retrieve user's order details
+- Admin:
+  - GET /api/admin/orders/             list/filter orders
+  - GET /api/admin/orders/{id}/        retrieve an order
+  - POST /api/admin/orders/{id}/transition/  status transition (idempotent)
+
+Idempotency:
+- Status transitions accept an idempotency key via JSON payload or `Idempotency-Key` header.
+- Existing Order.transition_status() + OrderStatusHistory uniqueness enforce idempotency.
 """
 
 from __future__ import annotations
+
+from typing import Optional
 
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
@@ -23,15 +39,28 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Coupon, Item, Order, OrderStatusHistory, Refund
-from core.permissions import IsAdminGroupOrDjangoPermission
 from core.inventory import (
     commit_inventory_for_paid_order,
     release_inventory_reservations_for_order,
     reserve_inventory_for_order,
     restock_inventory_for_order_refund,
 )
-from core.payment_service import attempt_payment_for_order, get_payment_mode, PaymentResultCode
+from core.models import Address, Coupon, Item, Order, OrderItem, OrderStatusHistory, Payment, Refund
+from core.payment_service import PaymentResultCode, attempt_payment_for_order, get_payment_mode
+from core.permissions import IsAdminGroupOrDjangoPermission
+
+
+def _get_idempotency_key_from_request(request) -> Optional[str]:
+    """
+    Read idempotency key from request header.
+
+    We support the de-facto standard `Idempotency-Key` header.
+    """
+    key = request.headers.get("Idempotency-Key")
+    if key is None:
+        return None
+    key = str(key).strip()
+    return key or None
 
 
 class HealthAPIView(APIView):
@@ -46,11 +75,13 @@ class HealthAPIView(APIView):
 
 
 # -------------------------
-# Serializers (minimal)
+# Serializers
 # -------------------------
 
 
 class ItemSerializer(serializers.ModelSerializer):
+    """Read-only item summary for order contexts."""
+
     class Meta:
         model = Item
         fields = [
@@ -66,13 +97,96 @@ class ItemSerializer(serializers.ModelSerializer):
         ]
 
 
-class CouponSerializer(serializers.ModelSerializer):
+class AddressSerializer(serializers.ModelSerializer):
+    """Address representation used for order shipping/billing summaries."""
+
+    class Meta:
+        model = Address
+        fields = [
+            "id",
+            "street_address",
+            "apartment_address",
+            "country",
+            "zip",
+            "address_type",
+            "default",
+        ]
+
+
+class PaymentSummarySerializer(serializers.ModelSerializer):
+    """Payment summary exposed on orders (provider-agnostic)."""
+
+    class Meta:
+        model = Payment
+        fields = [
+            "id",
+            "provider",
+            "mode",
+            "provider_reference",
+            "idempotency_key",
+            "status",
+            "error_message",
+            "timestamp",
+            "amount",
+        ]
+
+
+class CouponSummarySerializer(serializers.ModelSerializer):
+    """Coupon summary exposed on orders."""
+
     class Meta:
         model = Coupon
         fields = ["id", "code", "amount"]
 
 
+class OrderItemSerializer(serializers.ModelSerializer):
+    """OrderItem serializer embedding an item summary and pricing totals."""
+
+    item = ItemSerializer(read_only=True)
+
+    final_price = serializers.SerializerMethodField()
+    total_item_price = serializers.SerializerMethodField()
+    total_discount_item_price = serializers.SerializerMethodField()
+    amount_saved = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            "id",
+            "ordered",
+            "quantity",
+            "item",
+            # Inventory tracking
+            "quantity_reserved",
+            "quantity_committed",
+            "quantity_restocked",
+            # Pricing helpers
+            "total_item_price",
+            "total_discount_item_price",
+            "amount_saved",
+            "final_price",
+        ]
+        read_only_fields = fields
+
+    def get_total_item_price(self, obj) -> float:
+        return float(obj.get_total_item_price())
+
+    def get_total_discount_item_price(self, obj) -> float:
+        return float(obj.get_total_discount_item_price())
+
+    def get_amount_saved(self, obj) -> float:
+        return float(obj.get_amount_saved())
+
+    def get_final_price(self, obj) -> float:
+        return float(obj.get_final_price())
+
+
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
+    """Order status transition audit log."""
+
+    performed_by_id = serializers.IntegerField(source="performed_by.id", read_only=True)
+    performed_by_username = serializers.CharField(source="performed_by.username", read_only=True)
+
     class Meta:
         model = OrderStatusHistory
         fields = [
@@ -80,22 +194,36 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
             "from_status",
             "to_status",
             "performed_at",
-            "performed_by",
+            "performed_by_id",
+            "performed_by_username",
             "idempotency_key",
             "reason",
             "metadata",
         ]
+        read_only_fields = fields
 
 
 class OrderSerializer(serializers.ModelSerializer):
     """
-    Minimal order representation for API clients.
+    User-facing order representation.
 
-    Note: We don't embed full OrderItem details here to keep the API surface small.
+    Includes:
+    - items (with item summaries)
+    - totals
+    - coupon summary
+    - shipping/billing addresses
+    - payment summary (if present)
+
+    NOTE: For customers we do not expose full status history by default; admins
+    get it via AdminOrderSerializer.
     """
 
+    items = OrderItemSerializer(many=True, read_only=True)
     total = serializers.SerializerMethodField()
-    status_history = OrderStatusHistorySerializer(many=True, read_only=True)
+    coupon = CouponSummarySerializer(read_only=True)
+    shipping_address = AddressSerializer(read_only=True)
+    billing_address = AddressSerializer(read_only=True)
+    payment = PaymentSummarySerializer(read_only=True)
 
     class Meta:
         model = Order
@@ -105,16 +233,69 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "ordered",
             "ordered_date",
+            # legacy flags retained for compatibility
             "being_delivered",
             "received",
             "refund_requested",
             "refund_granted",
+            # relationships / summaries
+            "items",
+            "shipping_address",
+            "billing_address",
+            "payment",
+            "coupon",
             "total",
-            "status_history",
+            "start_date",
         ]
+        read_only_fields = fields
 
     def get_total(self, obj) -> float:
-        return obj.get_total()
+        return float(obj.get_total())
+
+
+class AdminOrderSerializer(OrderSerializer):
+    """
+    Admin-facing order representation includes immutable status history.
+
+    This is useful for admin dashboards and audit tooling.
+    """
+
+    status_history = OrderStatusHistorySerializer(many=True, read_only=True)
+
+    class Meta(OrderSerializer.Meta):
+        fields = OrderSerializer.Meta.fields + ["status_history"]
+
+
+class OrderCheckoutSummarySerializer(serializers.Serializer):
+    """
+    Active cart / checkout summary for the current user.
+
+    This endpoint is intended for UIs to render a checkout summary without mutating state.
+    """
+
+    order = OrderSerializer(allow_null=True)
+    has_active_order = serializers.BooleanField()
+    payment_mode = serializers.CharField()
+    totals = serializers.DictField()
+    notes = serializers.ListField(child=serializers.CharField())
+
+
+class AdminOrderTransitionSerializer(serializers.Serializer):
+    """
+    Admin transition request payload.
+
+    - target_status: required new status.
+    - idempotency_key: optional but strongly recommended so clients can safely retry.
+    - reason/metadata: optional audit context.
+
+    You can also provide the idempotency key via `Idempotency-Key` header; if both
+    are present, body wins.
+    """
+
+    target_status = serializers.ChoiceField(choices=Order.Status.choices)
+    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
+    reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    metadata = serializers.JSONField(required=False)
 
 
 class DummyPaymentSimulateSerializer(serializers.Serializer):
@@ -129,21 +310,6 @@ class DummyPaymentSimulateSerializer(serializers.Serializer):
 
     outcome = serializers.ChoiceField(choices=[("success", "success"), ("fail", "fail")], required=False)
     idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
-
-
-class AdminOrderTransitionSerializer(serializers.Serializer):
-    """
-    Admin transition request payload.
-
-    - target_status: required new status.
-    - idempotency_key: optional but strongly recommended so clients can safely retry.
-    - reason/metadata: optional audit context.
-    """
-
-    target_status = serializers.ChoiceField(choices=Order.Status.choices)
-    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
-    reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    metadata = serializers.JSONField(required=False)
 
 
 # -------------------------
@@ -190,9 +356,64 @@ class PublicItemDetailAPIView(APIView):
 # -------------------------
 
 
+class MyActiveOrderCheckoutSummaryAPIView(APIView):
+    """
+    Customer: get active cart / checkout summary.
+
+    Route:
+      GET /api/orders/active/
+
+    Behavior:
+      - Returns the most recent active (ordered=False) order for the user if present.
+      - Does NOT reserve inventory or attempt payment (read-only summary).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    # PUBLIC_INTERFACE
+    def get(self, request, *args, **kwargs):
+        """Return the authenticated user's active cart/checkout summary."""
+        order = (
+            Order.objects.filter(user=request.user, ordered=False)
+            .prefetch_related("items__item")
+            .select_related("shipping_address", "billing_address", "payment", "coupon")
+            .order_by("-id")
+            .first()
+        )
+
+        totals = {"subtotal": 0.0, "coupon_amount": 0.0, "total": 0.0}
+        notes: list[str] = []
+
+        if order:
+            totals["total"] = float(order.get_total())
+            # Subtotal (before coupon) is derived from items only.
+            subtotal = 0.0
+            for oi in order.items.all():
+                subtotal += float(oi.get_final_price())
+            totals["subtotal"] = float(subtotal)
+            totals["coupon_amount"] = float(order.coupon.amount) if order.coupon else 0.0
+        else:
+            notes.append("No active order.")
+
+        return Response(
+            OrderCheckoutSummarySerializer(
+                {
+                    "order": OrderSerializer(order).data if order else None,
+                    "has_active_order": bool(order),
+                    "payment_mode": get_payment_mode(),
+                    "totals": totals,
+                    "notes": notes,
+                }
+            ).data
+        )
+
+
 class MyOrdersListAPIView(APIView):
     """
     Customer: list the authenticated user's orders.
+
+    Route:
+      GET /api/orders/
 
     JWT-protected (or session auth) via IsAuthenticated.
     """
@@ -201,14 +422,22 @@ class MyOrdersListAPIView(APIView):
 
     # PUBLIC_INTERFACE
     def get(self, request, *args, **kwargs):
-        """List orders for the current user."""
-        orders = Order.objects.filter(user=request.user).order_by("-id")
+        """List orders for the current user (new canonical route)."""
+        orders = (
+            Order.objects.filter(user=request.user)
+            .prefetch_related("items__item")
+            .select_related("shipping_address", "billing_address", "payment", "coupon")
+            .order_by("-id")
+        )
         return Response(OrderSerializer(orders, many=True).data)
 
 
 class MyOrderDetailAPIView(APIView):
     """
     Customer: retrieve an order that belongs to the authenticated user.
+
+    Route:
+      GET /api/orders/{id}/
 
     Object-level access enforcement:
     - 404 if the order does not belong to the requesting user.
@@ -219,7 +448,14 @@ class MyOrderDetailAPIView(APIView):
     # PUBLIC_INTERFACE
     def get(self, request, order_id: int, *args, **kwargs):
         """Retrieve one order for the current user."""
-        order = get_object_or_404(Order, pk=order_id, user=request.user)
+        order = (
+            Order.objects.filter(pk=order_id, user=request.user)
+            .prefetch_related("items__item")
+            .select_related("shipping_address", "billing_address", "payment", "coupon")
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(OrderSerializer(order).data)
 
 
@@ -228,132 +464,92 @@ class MyOrderDetailAPIView(APIView):
 # -------------------------
 
 
-class AdminItemListCreateAPIView(APIView):
+class AdminOrderListAPIView(APIView):
     """
-    Admin: list/create products.
+    Admin: list/filter orders.
 
-    Requires Admin group OR relevant model permissions:
-    - core.view_item / core.add_item
+    Route:
+      GET /api/admin/orders/
+
+    Supported query params:
+      - status=CREATED|PAID|FULFILLING|SHIPPED|DELIVERED|CANCELLED|REFUNDED
+      - user_id=<int>
+      - ordered=true|false
+      - q=<string> (matches ref_code, username)
     """
 
     permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
-    required_django_perms = ("core.view_item", "core.add_item")
+    required_django_perms = ("core.view_order",)
 
     # PUBLIC_INTERFACE
     def get(self, request, *args, **kwargs):
-        """List all products (admin)."""
-        items = Item.objects.all().order_by("id")
-        return Response(ItemSerializer(items, many=True).data)
+        """List orders (admin) with basic filtering."""
+        qs = (
+            Order.objects.all()
+            .prefetch_related("items__item", "status_history")
+            .select_related("user", "shipping_address", "billing_address", "payment", "coupon")
+            .order_by("-id")
+        )
 
-    # PUBLIC_INTERFACE
-    def post(self, request, *args, **kwargs):
-        """Create a product (admin)."""
-        ser = ItemSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        item = ser.save()
-        return Response(ItemSerializer(item).data, status=status.HTTP_201_CREATED)
+        status_param = request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        user_id = request.query_params.get("user_id")
+        if user_id:
+            try:
+                qs = qs.filter(user_id=int(user_id))
+            except (TypeError, ValueError):
+                return Response({"detail": "Invalid user_id."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ordered_param = request.query_params.get("ordered")
+        if ordered_param is not None and ordered_param != "":
+            val = str(ordered_param).lower()
+            if val in ("true", "1", "yes"):
+                qs = qs.filter(ordered=True)
+            elif val in ("false", "0", "no"):
+                qs = qs.filter(ordered=False)
+            else:
+                return Response({"detail": "Invalid ordered param (use true/false)."}, status=status.HTTP_400_BAD_REQUEST)
+
+        q = request.query_params.get("q")
+        if q:
+            qs = qs.filter(ref_code__icontains=q) | qs.filter(user__username__icontains=q)
+
+        return Response(AdminOrderSerializer(qs, many=True).data)
 
 
-class AdminItemDetailAPIView(APIView):
+class AdminOrderDetailAPIView(APIView):
     """
-    Admin: retrieve/update/delete a product by id.
+    Admin: retrieve an order.
 
-    Requires Admin group OR relevant model permissions:
-    - core.view_item / core.change_item / core.delete_item
-    """
-
-    permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
-    required_django_perms = ("core.view_item", "core.change_item", "core.delete_item")
-
-    # PUBLIC_INTERFACE
-    def get(self, request, item_id: int, *args, **kwargs):
-        """Retrieve a product (admin)."""
-        item = get_object_or_404(Item, pk=item_id)
-        return Response(ItemSerializer(item).data)
-
-    # PUBLIC_INTERFACE
-    def put(self, request, item_id: int, *args, **kwargs):
-        """Update a product (admin)."""
-        item = get_object_or_404(Item, pk=item_id)
-        ser = ItemSerializer(instance=item, data=request.data)
-        ser.is_valid(raise_exception=True)
-        item = ser.save()
-        return Response(ItemSerializer(item).data)
-
-    # PUBLIC_INTERFACE
-    def patch(self, request, item_id: int, *args, **kwargs):
-        """Partially update a product (admin)."""
-        item = get_object_or_404(Item, pk=item_id)
-        ser = ItemSerializer(instance=item, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True)
-        item = ser.save()
-        return Response(ItemSerializer(item).data)
-
-    # PUBLIC_INTERFACE
-    def delete(self, request, item_id: int, *args, **kwargs):
-        """Delete a product (admin)."""
-        item = get_object_or_404(Item, pk=item_id)
-        item.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class AdminCouponListCreateAPIView(APIView):
-    """
-    Admin: list/create coupons.
-
-    Requires Admin group OR relevant model permissions:
-    - core.view_coupon / core.add_coupon
+    Route:
+      GET /api/admin/orders/{id}/
     """
 
     permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
-    required_django_perms = ("core.view_coupon", "core.add_coupon")
+    required_django_perms = ("core.view_order",)
 
     # PUBLIC_INTERFACE
-    def get(self, request, *args, **kwargs):
-        """List coupons (admin)."""
-        coupons = Coupon.objects.all().order_by("id")
-        return Response(CouponSerializer(coupons, many=True).data)
-
-    # PUBLIC_INTERFACE
-    def post(self, request, *args, **kwargs):
-        """Create coupon (admin)."""
-        ser = CouponSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        coupon = ser.save()
-        return Response(CouponSerializer(coupon).data, status=status.HTTP_201_CREATED)
-
-
-class AdminCouponDetailAPIView(APIView):
-    """
-    Admin: update/delete coupon.
-
-    Requires Admin group OR relevant model permissions:
-    - core.change_coupon / core.delete_coupon / core.view_coupon
-    """
-
-    permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
-    required_django_perms = ("core.change_coupon", "core.delete_coupon", "core.view_coupon")
-
-    # PUBLIC_INTERFACE
-    def patch(self, request, coupon_id: int, *args, **kwargs):
-        """Update coupon (admin)."""
-        coupon = get_object_or_404(Coupon, pk=coupon_id)
-        ser = CouponSerializer(instance=coupon, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True)
-        coupon = ser.save()
-        return Response(CouponSerializer(coupon).data)
-
-    # PUBLIC_INTERFACE
-    def delete(self, request, coupon_id: int, *args, **kwargs):
-        """Delete coupon (admin)."""
-        coupon = get_object_or_404(Coupon, pk=coupon_id)
-        coupon.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+    def get(self, request, order_id: int, *args, **kwargs):
+        """Retrieve one order (admin)."""
+        order = (
+            Order.objects.filter(pk=order_id)
+            .prefetch_related("items__item", "status_history")
+            .select_related("user", "shipping_address", "billing_address", "payment", "coupon")
+            .first()
+        )
+        if not order:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(AdminOrderSerializer(order).data)
 
 
 class AdminOrderStatusTransitionAPIView(APIView):
     """
     Admin: transition order status (explicit lifecycle).
+
+    Route:
+      POST /api/admin/orders/{id}/transition/
 
     This is the canonical way to move orders through:
       CREATED -> PAID -> FULFILLING -> SHIPPED -> DELIVERED (+ CANCELLED/REFUNDED).
@@ -378,9 +574,11 @@ class AdminOrderStatusTransitionAPIView(APIView):
         ser.is_valid(raise_exception=True)
 
         payload = ser.validated_data
-        idempotency_key = payload.get("idempotency_key") or None
-        if idempotency_key == "":
-            idempotency_key = None
+
+        idempotency_key = payload.get("idempotency_key")
+        if idempotency_key in ("", None):
+            # fallback to header if body isn't provided
+            idempotency_key = _get_idempotency_key_from_request(request)
 
         target_status = payload["target_status"]
 
@@ -428,11 +626,10 @@ class AdminOrderStatusTransitionAPIView(APIView):
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Refresh to ensure response contains the latest state + history.
         order.refresh_from_db()
         return Response(
             {
-                "order": OrderSerializer(order).data,
+                "order": AdminOrderSerializer(order).data,
                 "transition": OrderStatusHistorySerializer(history).data,
             }
         )

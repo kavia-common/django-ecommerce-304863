@@ -3,6 +3,16 @@ API URL configuration for the core app.
 
 This module is intentionally separate from the template-based URLConf to ensure
 we can evolve an API surface (JWT/DRF) without impacting existing UI routes.
+
+Order routes (new canonical):
+- User:
+  - GET /api/orders/active/
+  - GET /api/orders/
+  - GET /api/orders/{id}/
+- Admin:
+  - GET /api/admin/orders/
+  - GET /api/admin/orders/{id}/
+  - POST /api/admin/orders/{id}/transition/
 """
 
 from django.urls import include, path
@@ -12,13 +22,13 @@ from core.api_viewsets import ProductViewSet, WishlistViewSet
 from core.api_views import (
     AdminCouponDetailAPIView,
     AdminCouponListCreateAPIView,
-    AdminItemDetailAPIView,
-    AdminItemListCreateAPIView,
+    AdminOrderDetailAPIView,
+    AdminOrderListAPIView,
     AdminOrderStatusTransitionAPIView,
     AdminRefundModerationAPIView,
     DummyPaymentSimulateAPIView,
     HealthAPIView,
-    MyActiveOrderApplyCouponAPIView,
+    MyActiveOrderCheckoutSummaryAPIView,
     MyOrderDetailAPIView,
     MyOrdersListAPIView,
     PublicItemDetailAPIView,
@@ -43,20 +53,16 @@ urlpatterns = [
         PublicItemDetailAPIView.as_view(),
         name="api-product-detail-legacy",
     ),
-    path("admin/products-legacy/", AdminItemListCreateAPIView.as_view(), name="api-admin-products-legacy"),
-    path(
-        "admin/products-legacy/<int:item_id>/",
-        AdminItemDetailAPIView.as_view(),
-        name="api-admin-product-detail-legacy",
-    ),
-    # Customer (JWT/session) endpoints
-    path("me/orders/", MyOrdersListAPIView.as_view(), name="api-my-orders"),
-    path("me/orders/<int:order_id>/", MyOrderDetailAPIView.as_view(), name="api-my-order-detail"),
-    path("me/checkout/coupon/apply/", MyActiveOrderApplyCouponAPIView.as_view(), name="api-my-active-order-apply-coupon"),
+    # User order endpoints (JWT/session)
+    path("orders/active/", MyActiveOrderCheckoutSummaryAPIView.as_view(), name="api-orders-active"),
+    path("orders/", MyOrdersListAPIView.as_view(), name="api-orders"),
+    path("orders/<int:order_id>/", MyOrderDetailAPIView.as_view(), name="api-order-detail"),
     path("me/payments/dummy/simulate/", DummyPaymentSimulateAPIView.as_view(), name="api-dummy-payment-simulate"),
-    # Admin (RBAC enforced via DRF permissions)
+    # Admin endpoints (RBAC enforced via DRF permissions)
     path("admin/coupons/", AdminCouponListCreateAPIView.as_view(), name="api-admin-coupons"),
     path("admin/coupons/<int:coupon_id>/", AdminCouponDetailAPIView.as_view(), name="api-admin-coupon-detail"),
+    path("admin/orders/", AdminOrderListAPIView.as_view(), name="api-admin-orders"),
+    path("admin/orders/<int:order_id>/", AdminOrderDetailAPIView.as_view(), name="api-admin-order-detail"),
     path(
         "admin/orders/<int:order_id>/transition/",
         AdminOrderStatusTransitionAPIView.as_view(),
