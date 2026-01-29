@@ -514,7 +514,10 @@ class AdminOrderListAPIView(APIView):
 
         q = request.query_params.get("q")
         if q:
-            qs = qs.filter(ref_code__icontains=q) | qs.filter(user__username__icontains=q)
+            # Use Q objects; OR-ing querysets (`qs1 | qs2`) can break other filters/order_by.
+            from django.db.models import Q
+
+            qs = qs.filter(Q(ref_code__icontains=q) | Q(user__username__icontains=q))
 
         return Response(AdminOrderSerializer(qs, many=True).data)
 
