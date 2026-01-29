@@ -295,7 +295,19 @@ class PaymentView(View):
                 order.ordered = True
                 order.payment = payment
                 order.ref_code = create_ref_code()
-                order.save()
+                # Keep existing checkout flow intact, but also move the new explicit status forward.
+                # This makes the payment callback idempotent-safe for retries.
+                try:
+                    order.transition_status(
+                        target_status=Order.Status.PAID,
+                        performed_by=self.request.user,
+                        reason="Payment succeeded (Stripe)",
+                        idempotency_key=f"payment:{payment.stripe_charge_id}",
+                        metadata={"stripe_charge_id": payment.stripe_charge_id},
+                    )
+                except Exception:
+                    # Defensive: do not break checkout flow if lifecycle transition fails.
+                    order.save()
 
                 messages.success(self.request, "Your order was successful!")
                 return redirect("/")

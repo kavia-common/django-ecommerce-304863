@@ -23,7 +23,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Coupon, Item, Order, Refund
+from core.models import Coupon, Item, Order, OrderStatusHistory, Refund
 from core.permissions import IsAdminGroupOrDjangoPermission
 
 
@@ -65,6 +65,21 @@ class CouponSerializer(serializers.ModelSerializer):
         fields = ["id", "code", "amount"]
 
 
+class OrderStatusHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderStatusHistory
+        fields = [
+            "id",
+            "from_status",
+            "to_status",
+            "performed_at",
+            "performed_by",
+            "idempotency_key",
+            "reason",
+            "metadata",
+        ]
+
+
 class OrderSerializer(serializers.ModelSerializer):
     """
     Minimal order representation for API clients.
@@ -73,12 +88,14 @@ class OrderSerializer(serializers.ModelSerializer):
     """
 
     total = serializers.SerializerMethodField()
+    status_history = OrderStatusHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
         fields = [
             "id",
             "ref_code",
+            "status",
             "ordered",
             "ordered_date",
             "being_delivered",
@@ -86,17 +103,26 @@ class OrderSerializer(serializers.ModelSerializer):
             "refund_requested",
             "refund_granted",
             "total",
+            "status_history",
         ]
 
     def get_total(self, obj) -> float:
         return obj.get_total()
 
 
-class OrderStatusTransitionSerializer(serializers.Serializer):
-    being_delivered = serializers.BooleanField(required=False)
-    received = serializers.BooleanField(required=False)
-    refund_requested = serializers.BooleanField(required=False)
-    refund_granted = serializers.BooleanField(required=False)
+class AdminOrderTransitionSerializer(serializers.Serializer):
+    """
+    Admin transition request payload.
+
+    - target_status: required new status.
+    - idempotency_key: optional but strongly recommended so clients can safely retry.
+    - reason/metadata: optional audit context.
+    """
+
+    target_status = serializers.ChoiceField(choices=Order.Status.choices)
+    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
+    reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    metadata = serializers.JSONField(required=False)
 
 
 # -------------------------
@@ -306,10 +332,15 @@ class AdminCouponDetailAPIView(APIView):
 
 class AdminOrderStatusTransitionAPIView(APIView):
     """
-    Admin: transition order status flags.
+    Admin: transition order status (explicit lifecycle).
 
-    Note: The legacy data model uses booleans (being_delivered/received/refund_*).
-    This endpoint exposes controlled transitions for admin operations.
+    This is the canonical way to move orders through:
+      CREATED -> PAID -> FULFILLING -> SHIPPED -> DELIVERED (+ CANCELLED/REFUNDED).
+
+    Idempotency:
+      Provide an `idempotency_key` so retries do not duplicate state transitions. If a
+      history record already exists for the given (order, idempotency_key), we return
+      that history record and the order (no changes applied).
 
     Requires Admin group OR relevant model permissions:
     - core.change_order
@@ -320,19 +351,35 @@ class AdminOrderStatusTransitionAPIView(APIView):
 
     # PUBLIC_INTERFACE
     def post(self, request, order_id: int, *args, **kwargs):
-        """Update order status flags (admin)."""
+        """Transition order status (admin)."""
         order = get_object_or_404(Order, pk=order_id)
-        ser = OrderStatusTransitionSerializer(data=request.data)
+        ser = AdminOrderTransitionSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        data = ser.validated_data
-        # Only update provided fields.
-        for field in ["being_delivered", "received", "refund_requested", "refund_granted"]:
-            if field in data:
-                setattr(order, field, data[field])
+        payload = ser.validated_data
+        idempotency_key = payload.get("idempotency_key") or None
+        if idempotency_key == "":
+            idempotency_key = None
 
-        order.save(update_fields=[k for k in data.keys()])
-        return Response({"id": order.id, "updated": list(data.keys())})
+        try:
+            history = order.transition_status(
+                target_status=payload["target_status"],
+                performed_by=request.user,
+                reason=payload.get("reason") or None,
+                idempotency_key=idempotency_key,
+                metadata=payload.get("metadata") or None,
+            )
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Refresh to ensure response contains the latest state + history.
+        order.refresh_from_db()
+        return Response(
+            {
+                "order": OrderSerializer(order).data,
+                "transition": OrderStatusHistorySerializer(history).data,
+            }
+        )
 
 
 class AdminRefundModerationAPIView(APIView):
@@ -371,10 +418,17 @@ class AdminRefundModerationAPIView(APIView):
         # Mirror admin action behavior on the related order.
         order = refund.order
         if refund.accepted:
-            order.refund_requested = False
-            order.refund_granted = True
+            # Transition to REFUNDED; idempotency key ensures repeat moderation calls are safe.
+            order.transition_status(
+                target_status=Order.Status.REFUNDED,
+                performed_by=request.user,
+                reason="Refund accepted via AdminRefundModerationAPIView",
+                idempotency_key=f"refund:{refund.id}:accepted",
+                metadata={"refund_id": refund.id},
+            )
         else:
+            # Denied: keep order in its current status, just ensure legacy flags align with denial.
             order.refund_granted = False
-        order.save(update_fields=["refund_requested", "refund_granted"])
+            order.save(update_fields=["refund_granted"])
 
         return Response({"id": refund.id, "accepted": refund.accepted})
