@@ -19,7 +19,7 @@ requests-oauthlib==1.2.0
 # UI / forms
 django-crispy-forms==2.1
 crispy-bootstrap4==2024.1
-django-countries==5.3.3
+django-countries==8.2.0
 
 # Middleware / tooling
 django-cors-headers==4.3.1
@@ -27,10 +27,10 @@ django-debug-toolbar==4.2.0
 
 idna==2.8
 pep8==1.7.1
-Pillow==6.2.2
+Pillow==10.2.0
 pycodestyle==2.5.0
 python-decouple==3.1
 pytz==2018.5
-sqlparse==0.2.4
+sqlparse==0.5.5
 stripe==2.27.0
 urllib3==1.24.2
