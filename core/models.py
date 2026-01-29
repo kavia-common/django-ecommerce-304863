@@ -538,11 +538,52 @@ class Payment(models.Model):
 
 
 class Coupon(models.Model):
+    """
+    Coupon / promotion code.
+
+    NOTE:
+    - This project currently uses a legacy schema: (code, amount).
+    - Some parts of the codebase reference `apply_to_order` as an upgraded API.
+      To keep behavior additive and avoid runtime errors, we provide a minimal,
+      backward-compatible implementation here.
+    - If/when the schema is upgraded (validity windows, usage limits, min spend,
+      percent/fixed types, redemptions), admin.py will auto-expose those fields
+      without further changes.
+    """
+
     code = models.CharField(max_length=15)
-    amount = models.FloatField()
+    amount = models.FloatField(help_text="Legacy fixed-amount discount.")
 
     def __str__(self):
         return self.code
+
+    # PUBLIC_INTERFACE
+    def apply_to_order(self, *, user, order, idempotency_key: str | None = None):
+        """
+        PUBLIC_INTERFACE
+        Apply this coupon to an order (legacy-compatible).
+
+        This minimal implementation:
+          - sets order.coupon to self
+          - returns a 3-tuple compatible with callers: (ok, message, redemption)
+
+        Returns:
+          (True, "Applied", None) on success
+
+        Notes:
+          - Usage limits / validity windows / min spend are not enforced in the legacy schema.
+          - Idempotency is effectively handled by setting the same FK repeatedly.
+        """
+        if order is None:
+            return False, "Order is required.", None
+
+        # If it's already applied, treat as idempotent success.
+        if getattr(order, "coupon_id", None) == self.id:
+            return True, "Coupon already applied.", None
+
+        order.coupon = self
+        order.save(update_fields=["coupon"])
+        return True, "Coupon applied.", None
 
 
 class Refund(models.Model):
