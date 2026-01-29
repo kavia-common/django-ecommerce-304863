@@ -47,22 +47,48 @@ urlpatterns = [
     # Product API (public read-only + admin CRUD on same routes)
     path("", include(router.urls)),
     # Legacy public/admin product APIViews (kept for backwards compatibility; do not use for new clients)
-    path("products-legacy/", PublicItemListAPIView.as_view(), name="api-products-legacy"),
+    path(
+        "products-legacy/", PublicItemListAPIView.as_view(), name="api-products-legacy"
+    ),
     path(
         "products-legacy/<int:item_id>/",
         PublicItemDetailAPIView.as_view(),
         name="api-product-detail-legacy",
     ),
     # User order endpoints (JWT/session)
-    path("orders/active/", MyActiveOrderCheckoutSummaryAPIView.as_view(), name="api-orders-active"),
+    path(
+        "orders/active/",
+        MyActiveOrderCheckoutSummaryAPIView.as_view(),
+        name="api-orders-active",
+    ),
     path("orders/", MyOrdersListAPIView.as_view(), name="api-orders"),
-    path("orders/<int:order_id>/", MyOrderDetailAPIView.as_view(), name="api-order-detail"),
-    path("me/payments/dummy/simulate/", DummyPaymentSimulateAPIView.as_view(), name="api-dummy-payment-simulate"),
+    path(
+        "orders/<int:order_id>/",
+        MyOrderDetailAPIView.as_view(),
+        name="api-order-detail",
+    ),
+    path(
+        "me/payments/dummy/simulate/",
+        DummyPaymentSimulateAPIView.as_view(),
+        name="api-dummy-payment-simulate",
+    ),
     # Admin endpoints (RBAC enforced via DRF permissions)
-    path("admin/coupons/", AdminCouponListCreateAPIView.as_view(), name="api-admin-coupons"),
-    path("admin/coupons/<int:coupon_id>/", AdminCouponDetailAPIView.as_view(), name="api-admin-coupon-detail"),
+    path(
+        "admin/coupons/",
+        AdminCouponListCreateAPIView.as_view(),
+        name="api-admin-coupons",
+    ),
+    path(
+        "admin/coupons/<int:coupon_id>/",
+        AdminCouponDetailAPIView.as_view(),
+        name="api-admin-coupon-detail",
+    ),
     path("admin/orders/", AdminOrderListAPIView.as_view(), name="api-admin-orders"),
-    path("admin/orders/<int:order_id>/", AdminOrderDetailAPIView.as_view(), name="api-admin-order-detail"),
+    path(
+        "admin/orders/<int:order_id>/",
+        AdminOrderDetailAPIView.as_view(),
+        name="api-admin-order-detail",
+    ),
     path(
         "admin/orders/<int:order_id>/transition/",
         AdminOrderStatusTransitionAPIView.as_view(),

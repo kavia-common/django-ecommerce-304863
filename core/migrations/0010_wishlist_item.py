@@ -1,6 +1,6 @@
+import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
-import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
@@ -13,7 +13,15 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="WishlistItem",
             fields=[
-                ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 (
                     "item",
@@ -38,7 +46,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="wishlistitem",
-            constraint=models.UniqueConstraint(fields=("user", "item"), name="uniq_wishlist_user_item"),
+            constraint=models.UniqueConstraint(
+                fields=("user", "item"), name="uniq_wishlist_user_item"
+            ),
         ),
         migrations.AddIndex(
             model_name="wishlistitem",
@@ -46,6 +56,8 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="wishlistitem",
-            index=models.Index(fields=["user", "created_at"], name="idx_wishlist_user_created"),
+            index=models.Index(
+                fields=["user", "created_at"], name="idx_wishlist_user_created"
+            ),
         ),
     ]

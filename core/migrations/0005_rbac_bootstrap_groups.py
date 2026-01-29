@@ -85,5 +85,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(bootstrap_groups_and_permissions, reverse_code=remove_groups_permissions),
+        migrations.RunPython(
+            bootstrap_groups_and_permissions, reverse_code=remove_groups_permissions
+        ),
     ]

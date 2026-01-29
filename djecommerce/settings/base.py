@@ -46,8 +46,12 @@ for sfx in preview_suffixes:
 #   - 'dummy' (default) or 'stripe'
 # Stripe keys are optional unless PAYMENT_MODE=stripe (enforced in production validation).
 PAYMENT_MODE = (env_str("PAYMENT_MODE", default="dummy") or "dummy").strip().lower()
-PAYMENT_DUMMY_OUTCOME = config("PAYMENT_DUMMY_OUTCOME", default="success")  # success|fail|random
-PAYMENT_DUMMY_FAIL_RATE = float(config("PAYMENT_DUMMY_FAIL_RATE", default="0.0"))  # used when outcome=random
+PAYMENT_DUMMY_OUTCOME = config(
+    "PAYMENT_DUMMY_OUTCOME", default="success"
+)  # success|fail|random
+PAYMENT_DUMMY_FAIL_RATE = float(
+    config("PAYMENT_DUMMY_FAIL_RATE", default="0.0")
+)  # used when outcome=random
 
 # Stripe keys are read here; production enforcement happens in validate_settings() when mode=stripe.
 STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="")
@@ -60,6 +64,7 @@ validate_settings(
     allowed_hosts=ALLOWED_HOSTS,
     payment_mode=PAYMENT_MODE,
 )
+
 
 def _get_crispy_template_pack() -> str:
     """
@@ -105,7 +110,10 @@ INSTALLED_APPS = [
 ]
 
 # If the bootstrap4 template pack is available, enable it.
-if CRISPY_TEMPLATE_PACK == "bootstrap4" and importlib.util.find_spec("crispy_bootstrap4") is not None:
+if (
+    CRISPY_TEMPLATE_PACK == "bootstrap4"
+    and importlib.util.find_spec("crispy_bootstrap4") is not None
+):
     INSTALLED_APPS.append("crispy_bootstrap4")
 
 # Optional CORS support (only enabled if CORS_ALLOWED_ORIGINS is set).
@@ -208,19 +216,27 @@ CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=_secure_defaults)
 
 # Harden cookie behavior in production; allow overrides if needed.
 SESSION_COOKIE_HTTPONLY = env_bool("SESSION_COOKIE_HTTPONLY", default=True)
-CSRF_COOKIE_HTTPONLY = env_bool("CSRF_COOKIE_HTTPONLY", default=False)  # Django default is False
+CSRF_COOKIE_HTTPONLY = env_bool(
+    "CSRF_COOKIE_HTTPONLY", default=False
+)  # Django default is False
 SESSION_COOKIE_SAMESITE = env_str("SESSION_COOKIE_SAMESITE", default="Lax")
 CSRF_COOKIE_SAMESITE = env_str("CSRF_COOKIE_SAMESITE", default="Lax")
 
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=_secure_defaults)
 
 # HSTS
-SECURE_HSTS_SECONDS = int(env_str("SECURE_HSTS_SECONDS", default=str(31536000 if _secure_defaults else 0)))
-SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=_secure_defaults)
+SECURE_HSTS_SECONDS = int(
+    env_str("SECURE_HSTS_SECONDS", default=str(31536000 if _secure_defaults else 0))
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=_secure_defaults
+)
 SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD", default=_secure_defaults)
 
 # Additional security headers
-SECURE_CONTENT_TYPE_NOSNIFF = env_bool("SECURE_CONTENT_TYPE_NOSNIFF", default=_secure_defaults)
+SECURE_CONTENT_TYPE_NOSNIFF = env_bool(
+    "SECURE_CONTENT_TYPE_NOSNIFF", default=_secure_defaults
+)
 SECURE_REFERRER_POLICY = env_str("SECURE_REFERRER_POLICY", default="same-origin")
 
 # Proxy SSL header (common with gunicorn behind reverse proxy/load balancer)
@@ -230,7 +246,12 @@ if env_bool("USE_X_FORWARDED_PROTO", default=False):
 
 # CRISPY FORMS
 # NOTE: CRISPY_TEMPLATE_PACK is computed above in a startup-safe way.
-CRISPY_ALLOWED_TEMPLATE_PACKS = (CRISPY_TEMPLATE_PACK, "bootstrap3", "bootstrap4", "uni_form")
+CRISPY_ALLOWED_TEMPLATE_PACKS = (
+    CRISPY_TEMPLATE_PACK,
+    "bootstrap3",
+    "bootstrap4",
+    "uni_form",
+)
 
 # Logging (gunicorn-friendly)
 # LOG_FORMAT: text | json
@@ -277,12 +298,36 @@ LOGGING = {
     "loggers": {
         # Reduce noisy loggers
         "django.server": {"handlers": ["console"], "level": "INFO", "propagate": False},
-        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
-        "django.security": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
         # Log DRF/auth issues at warning+
-        "rest_framework": {"handlers": ["console"], "level": "WARNING", "propagate": False},
-        "rest_framework.authentication": {"handlers": ["console"], "level": "WARNING", "propagate": False},
-        "rest_framework.permissions": {"handlers": ["console"], "level": "WARNING", "propagate": False},
-        "django.db.backends": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "rest_framework": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "rest_framework.authentication": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "rest_framework.permissions": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
     },
 }

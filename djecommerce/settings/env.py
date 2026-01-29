@@ -176,5 +176,9 @@ def validate_settings(
         if payment_mode is not None:
             mode = _validate_payment_mode(payment_mode=payment_mode)
             if mode == "stripe":
-                require_env("STRIPE_SECRET_KEY", hint="Required when PAYMENT_MODE=stripe.")
-                require_env("STRIPE_PUBLIC_KEY", hint="Required when PAYMENT_MODE=stripe.")
+                require_env(
+                    "STRIPE_SECRET_KEY", hint="Required when PAYMENT_MODE=stripe."
+                )
+                require_env(
+                    "STRIPE_PUBLIC_KEY", hint="Required when PAYMENT_MODE=stripe."
+                )

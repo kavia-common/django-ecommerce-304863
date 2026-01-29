@@ -5,9 +5,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.db.models.signals import post_save
 from django.shortcuts import reverse
-from django.utils import timezone
 from django_countries.fields import CountryField
-
 
 CATEGORY_CHOICES = (
     ("S", "Shirt"),
@@ -145,11 +143,15 @@ class WishlistItem(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         constraints = [
-            models.UniqueConstraint(fields=["user", "item"], name="uniq_wishlist_user_item")
+            models.UniqueConstraint(
+                fields=["user", "item"], name="uniq_wishlist_user_item"
+            )
         ]
         indexes = [
             models.Index(fields=["user", "item"], name="idx_wishlist_user_item"),
-            models.Index(fields=["user", "created_at"], name="idx_wishlist_user_created"),
+            models.Index(
+                fields=["user", "created_at"], name="idx_wishlist_user_created"
+            ),
         ]
 
     def __str__(self) -> str:
@@ -172,8 +174,12 @@ class InventoryAdjustment(models.Model):
         CORRECTION = "CORRECTION", "Correction"
         OTHER = "OTHER", "Other"
 
-    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name="inventory_adjustments")
-    delta = models.IntegerField(help_text="Signed quantity change (e.g. +10 received, -1 sale).")
+    item = models.ForeignKey(
+        Item, on_delete=models.CASCADE, related_name="inventory_adjustments"
+    )
+    delta = models.IntegerField(
+        help_text="Signed quantity change (e.g. +10 received, -1 sale)."
+    )
     reason = models.CharField(max_length=24, choices=Reason.choices)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
@@ -278,8 +284,12 @@ class Order(models.Model):
         blank=True,
         null=True,
     )
-    payment = models.ForeignKey("Payment", on_delete=models.SET_NULL, blank=True, null=True)
-    coupon = models.ForeignKey("Coupon", on_delete=models.SET_NULL, blank=True, null=True)
+    payment = models.ForeignKey(
+        "Payment", on_delete=models.SET_NULL, blank=True, null=True
+    )
+    coupon = models.ForeignKey(
+        "Coupon", on_delete=models.SET_NULL, blank=True, null=True
+    )
 
     # Legacy flags (deprecated; retained temporarily for templates/admin)
     being_delivered = models.BooleanField(default=False)
@@ -349,8 +359,16 @@ class Order(models.Model):
     def _validate_transition(self, target_status: str) -> None:
         allowed = {
             Order.Status.CREATED: {Order.Status.PAID, Order.Status.CANCELLED},
-            Order.Status.PAID: {Order.Status.FULFILLING, Order.Status.CANCELLED, Order.Status.REFUNDED},
-            Order.Status.FULFILLING: {Order.Status.SHIPPED, Order.Status.CANCELLED, Order.Status.REFUNDED},
+            Order.Status.PAID: {
+                Order.Status.FULFILLING,
+                Order.Status.CANCELLED,
+                Order.Status.REFUNDED,
+            },
+            Order.Status.FULFILLING: {
+                Order.Status.SHIPPED,
+                Order.Status.CANCELLED,
+                Order.Status.REFUNDED,
+            },
             Order.Status.SHIPPED: {Order.Status.DELIVERED, Order.Status.REFUNDED},
             Order.Status.DELIVERED: {Order.Status.REFUNDED},
             Order.Status.CANCELLED: set(),
@@ -432,7 +450,9 @@ class OrderStatusHistory(models.Model):
     Immutable audit log of order status transitions.
     """
 
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="status_history")
+    order = models.ForeignKey(
+        Order, on_delete=models.CASCADE, related_name="status_history"
+    )
     from_status = models.CharField(max_length=16, choices=Order.Status.choices)
     to_status = models.CharField(max_length=16, choices=Order.Status.choices)
     performed_at = models.DateTimeField(auto_now_add=True)
@@ -529,7 +549,9 @@ class Payment(models.Model):
     error_message = models.TextField(blank=True, default="")
     raw_metadata = models.JSONField(blank=True, default=dict)
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, blank=True, null=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, blank=True, null=True
+    )
     amount = models.FloatField()
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -636,11 +658,16 @@ class Review(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         constraints = [
-            models.UniqueConstraint(fields=["user", "item"], name="uniq_review_user_item"),
+            models.UniqueConstraint(
+                fields=["user", "item"], name="uniq_review_user_item"
+            ),
         ]
         indexes = [
             # Keep index name <= 30 chars to satisfy Django backend name-length validation.
-            models.Index(fields=["item", "is_approved", "created_at"], name="idx_review_item_appr_created"),
+            models.Index(
+                fields=["item", "is_approved", "created_at"],
+                name="idx_review_item_appr_created",
+            ),
             models.Index(fields=["user", "created_at"], name="idx_review_user_created"),
         ]
 

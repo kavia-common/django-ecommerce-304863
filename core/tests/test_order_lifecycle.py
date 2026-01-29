@@ -4,7 +4,9 @@ from core.models import InventoryAdjustment, Order
 
 
 @pytest.mark.django_db
-def test_user_orders_endpoints_are_user_scoped(api_client, item_factory, order_factory, obtain_jwt_tokens, user_password, user):
+def test_user_orders_endpoints_are_user_scoped(
+    api_client, item_factory, order_factory, obtain_jwt_tokens, user_password, user
+):
     item = item_factory()
     order, _oi = order_factory(user=user, item=item, quantity=1)
 
@@ -15,8 +17,12 @@ def test_user_orders_endpoints_are_user_scoped(api_client, item_factory, order_f
     other.set_password("pw2")
     other.save()
 
-    hdr_user = {"HTTP_AUTHORIZATION": f"Bearer {obtain_jwt_tokens(user, user_password)['access']}"}
-    hdr_other = {"HTTP_AUTHORIZATION": f"Bearer {obtain_jwt_tokens(other, 'pw2')['access']}"}
+    hdr_user = {
+        "HTTP_AUTHORIZATION": f"Bearer {obtain_jwt_tokens(user, user_password)['access']}"
+    }
+    hdr_other = {
+        "HTTP_AUTHORIZATION": f"Bearer {obtain_jwt_tokens(other, 'pw2')['access']}"
+    }
 
     # User can list
     my_list = api_client.get("/api/orders/", **hdr_user)
@@ -48,13 +54,24 @@ def test_admin_transition_paid_is_idempotent_and_creates_history_and_inventory(
     auth_headers_for_admin,
 ):
     item = item_factory(stock_on_hand=10, stock_reserved=0)
-    order, oi = order_factory(user=admin_user_in_group, item=item, quantity=2, status=Order.Status.CREATED, ordered=False)
+    order, oi = order_factory(
+        user=admin_user_in_group,
+        item=item,
+        quantity=2,
+        status=Order.Status.CREATED,
+        ordered=False,
+    )
 
     before_hist = order.status_history.count()
     before_adj = InventoryAdjustment.objects.count()
 
     payload = {"target_status": Order.Status.PAID, "idempotency_key": "idem-paid-1"}
-    r1 = api_client.post(f"/api/admin/orders/{order.id}/transition/", payload, format="json", **auth_headers_for_admin)
+    r1 = api_client.post(
+        f"/api/admin/orders/{order.id}/transition/",
+        payload,
+        format="json",
+        **auth_headers_for_admin,
+    )
     assert r1.status_code == 200, r1.content
 
     order.refresh_from_db()
@@ -69,7 +86,12 @@ def test_admin_transition_paid_is_idempotent_and_creates_history_and_inventory(
     assert InventoryAdjustment.objects.count() == before_adj + 1
 
     # Repeat same transition with same idempotency key should not duplicate history nor adjustments
-    r2 = api_client.post(f"/api/admin/orders/{order.id}/transition/", payload, format="json", **auth_headers_for_admin)
+    r2 = api_client.post(
+        f"/api/admin/orders/{order.id}/transition/",
+        payload,
+        format="json",
+        **auth_headers_for_admin,
+    )
     assert r2.status_code == 200
     order.refresh_from_db()
     assert order.status_history.count() == before_hist + 1
@@ -77,9 +99,17 @@ def test_admin_transition_paid_is_idempotent_and_creates_history_and_inventory(
 
 
 @pytest.mark.django_db
-def test_admin_transition_cancel_releases_reservation(api_client, item_factory, order_factory, auth_headers_for_admin, admin_user_in_group):
+def test_admin_transition_cancel_releases_reservation(
+    api_client, item_factory, order_factory, auth_headers_for_admin, admin_user_in_group
+):
     item = item_factory(stock_on_hand=5, stock_reserved=0)
-    order, oi = order_factory(user=admin_user_in_group, item=item, quantity=3, status=Order.Status.CREATED, ordered=False)
+    order, oi = order_factory(
+        user=admin_user_in_group,
+        item=item,
+        quantity=3,
+        status=Order.Status.CREATED,
+        ordered=False,
+    )
 
     # Reserve via admin PAID? No: reserve happens inside PAID transition, but cancel should also release if reserved.
     # We'll reserve by calling PAID then "rewind" is not allowed; instead reserve through dummy payment endpoint isn't admin.
@@ -110,9 +140,17 @@ def test_admin_transition_cancel_releases_reservation(api_client, item_factory, 
 
 
 @pytest.mark.django_db
-def test_admin_transition_refund_restocks_and_is_idempotent(api_client, item_factory, order_factory, auth_headers_for_admin, admin_user_in_group):
+def test_admin_transition_refund_restocks_and_is_idempotent(
+    api_client, item_factory, order_factory, auth_headers_for_admin, admin_user_in_group
+):
     item = item_factory(stock_on_hand=4, stock_reserved=0)
-    order, oi = order_factory(user=admin_user_in_group, item=item, quantity=2, status=Order.Status.CREATED, ordered=False)
+    order, oi = order_factory(
+        user=admin_user_in_group,
+        item=item,
+        quantity=2,
+        status=Order.Status.CREATED,
+        ordered=False,
+    )
 
     api_client.post(
         f"/api/admin/orders/{order.id}/transition/",
@@ -125,7 +163,12 @@ def test_admin_transition_refund_restocks_and_is_idempotent(api_client, item_fac
 
     before_adj = InventoryAdjustment.objects.count()
     payload = {"target_status": Order.Status.REFUNDED, "idempotency_key": "refund-1"}
-    r1 = api_client.post(f"/api/admin/orders/{order.id}/transition/", payload, format="json", **auth_headers_for_admin)
+    r1 = api_client.post(
+        f"/api/admin/orders/{order.id}/transition/",
+        payload,
+        format="json",
+        **auth_headers_for_admin,
+    )
     assert r1.status_code == 200
 
     order.refresh_from_db()
@@ -137,15 +180,28 @@ def test_admin_transition_refund_restocks_and_is_idempotent(api_client, item_fac
     assert InventoryAdjustment.objects.count() == before_adj + 1
 
     # Idempotent repeat: no more adjustments
-    r2 = api_client.post(f"/api/admin/orders/{order.id}/transition/", payload, format="json", **auth_headers_for_admin)
+    r2 = api_client.post(
+        f"/api/admin/orders/{order.id}/transition/",
+        payload,
+        format="json",
+        **auth_headers_for_admin,
+    )
     assert r2.status_code == 200
     assert InventoryAdjustment.objects.count() == before_adj + 1
 
 
 @pytest.mark.django_db
-def test_invalid_order_transition_returns_400(api_client, item_factory, order_factory, auth_headers_for_admin, admin_user_in_group):
+def test_invalid_order_transition_returns_400(
+    api_client, item_factory, order_factory, auth_headers_for_admin, admin_user_in_group
+):
     item = item_factory()
-    order, _oi = order_factory(user=admin_user_in_group, item=item, quantity=1, status=Order.Status.CREATED, ordered=False)
+    order, _oi = order_factory(
+        user=admin_user_in_group,
+        item=item,
+        quantity=1,
+        status=Order.Status.CREATED,
+        ordered=False,
+    )
 
     # CREATED -> SHIPPED is invalid
     resp = api_client.post(

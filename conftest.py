@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import os
 import uuid
 from typing import Callable, Dict, Tuple
 
@@ -62,7 +61,9 @@ def user_password() -> str:
 
 @pytest.fixture
 def user(db, user_password) -> User:
-    u = User.objects.create(username=f"user_{uuid.uuid4().hex[:8]}", email="user@example.com")
+    u = User.objects.create(
+        username=f"user_{uuid.uuid4().hex[:8]}", email="user@example.com"
+    )
     u.set_password(user_password)
     u.save()
     return u
@@ -70,7 +71,9 @@ def user(db, user_password) -> User:
 
 @pytest.fixture
 def admin_user(db, user_password) -> User:
-    u = User.objects.create(username=f"admin_{uuid.uuid4().hex[:8]}", email="admin@example.com")
+    u = User.objects.create(
+        username=f"admin_{uuid.uuid4().hex[:8]}", email="admin@example.com"
+    )
     u.set_password(user_password)
     u.is_staff = True
     u.save()
@@ -119,7 +122,9 @@ def auth_headers_for_user(obtain_jwt_tokens, user, user_password) -> Dict[str, s
 
 
 @pytest.fixture
-def auth_headers_for_admin(obtain_jwt_tokens, admin_user_in_group, user_password) -> Dict[str, str]:
+def auth_headers_for_admin(
+    obtain_jwt_tokens, admin_user_in_group, user_password
+) -> Dict[str, str]:
     tokens = obtain_jwt_tokens(admin_user_in_group, user_password)
     return {"HTTP_AUTHORIZATION": f"Bearer {tokens['access']}"}
 
@@ -159,8 +164,17 @@ def order_factory(db) -> Callable[..., Tuple[Order, OrderItem]]:
       - ordered
     """
 
-    def _make(*, user: User, item: Item, quantity: int = 1, status: str = Order.Status.CREATED, ordered: bool = False):
-        oi = OrderItem.objects.create(user=user, item=item, quantity=quantity, ordered=ordered)
+    def _make(
+        *,
+        user: User,
+        item: Item,
+        quantity: int = 1,
+        status: str = Order.Status.CREATED,
+        ordered: bool = False,
+    ):
+        oi = OrderItem.objects.create(
+            user=user, item=item, quantity=quantity, ordered=ordered
+        )
         order = Order.objects.create(
             user=user,
             ordered=ordered,

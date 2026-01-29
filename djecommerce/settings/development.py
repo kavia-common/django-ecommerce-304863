@@ -40,7 +40,10 @@ def show_toolbar(request):
     return True
 
 
-DEBUG_TOOLBAR_CONFIG = {"INTERCEPT_REDIRECTS": False, "SHOW_TOOLBAR_CALLBACK": show_toolbar}
+DEBUG_TOOLBAR_CONFIG = {
+    "INTERCEPT_REDIRECTS": False,
+    "SHOW_TOOLBAR_CALLBACK": show_toolbar,
+}
 
 DATABASES = {
     "default": {
@@ -50,5 +53,9 @@ DATABASES = {
 }
 
 # Stripe keys (dev/test keys). Optional when running dummy payment mode.
-STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="") or config("STRIPE_TEST_PUBLIC_KEY", default="")
-STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="") or config("STRIPE_TEST_SECRET_KEY", default="")
+STRIPE_PUBLIC_KEY = env_str("STRIPE_PUBLIC_KEY", default="") or config(
+    "STRIPE_TEST_PUBLIC_KEY", default=""
+)
+STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY", default="") or config(
+    "STRIPE_TEST_SECRET_KEY", default=""
+)

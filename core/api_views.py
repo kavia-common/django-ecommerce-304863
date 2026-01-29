@@ -39,14 +39,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.inventory import (
-    commit_inventory_for_paid_order,
-    release_inventory_reservations_for_order,
-    reserve_inventory_for_order,
-    restock_inventory_for_order_refund,
-)
-from core.models import Address, Coupon, Item, Order, OrderItem, OrderStatusHistory, Payment, Refund
-from core.payment_service import PaymentResultCode, attempt_payment_for_order, get_payment_mode
+from core.inventory import (commit_inventory_for_paid_order,
+                            release_inventory_reservations_for_order,
+                            reserve_inventory_for_order,
+                            restock_inventory_for_order_refund)
+from core.models import (Address, Coupon, Item, Order, OrderItem,
+                         OrderStatusHistory, Payment, Refund)
+from core.payment_service import (PaymentResultCode, attempt_payment_for_order,
+                                  get_payment_mode)
 from core.permissions import IsAdminGroupOrDjangoPermission
 
 
@@ -181,7 +181,9 @@ class AdminCouponListCreateAPIView(APIView):
         ser = AdminCouponSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         coupon = ser.save()
-        return Response(AdminCouponSerializer(coupon).data, status=status.HTTP_201_CREATED)
+        return Response(
+            AdminCouponSerializer(coupon).data, status=status.HTTP_201_CREATED
+        )
 
 
 class AdminCouponDetailAPIView(APIView):
@@ -202,7 +204,11 @@ class AdminCouponDetailAPIView(APIView):
     """
 
     permission_classes = [IsAuthenticated, IsAdminGroupOrDjangoPermission]
-    required_django_perms = ("core.view_coupon", "core.change_coupon", "core.delete_coupon")
+    required_django_perms = (
+        "core.view_coupon",
+        "core.change_coupon",
+        "core.delete_coupon",
+    )
 
     # PUBLIC_INTERFACE
     def get(self, request, coupon_id: int, *args, **kwargs):
@@ -282,7 +288,9 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
     """Order status transition audit log."""
 
     performed_by_id = serializers.IntegerField(source="performed_by.id", read_only=True)
-    performed_by_username = serializers.CharField(source="performed_by.username", read_only=True)
+    performed_by_username = serializers.CharField(
+        source="performed_by.username", read_only=True
+    )
 
     class Meta:
         model = OrderStatusHistory
@@ -390,7 +398,9 @@ class AdminOrderTransitionSerializer(serializers.Serializer):
     """
 
     target_status = serializers.ChoiceField(choices=Order.Status.choices)
-    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
+    idempotency_key = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=128
+    )
     reason = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     metadata = serializers.JSONField(required=False)
 
@@ -405,8 +415,12 @@ class DummyPaymentSimulateSerializer(serializers.Serializer):
       - optional, recommended for retry safety.
     """
 
-    outcome = serializers.ChoiceField(choices=[("success", "success"), ("fail", "fail")], required=False)
-    idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=128)
+    outcome = serializers.ChoiceField(
+        choices=[("success", "success"), ("fail", "fail")], required=False
+    )
+    idempotency_key = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True, max_length=128
+    )
 
 
 # -------------------------
@@ -488,7 +502,9 @@ class MyActiveOrderCheckoutSummaryAPIView(APIView):
             for oi in order.items.all():
                 subtotal += float(oi.get_final_price())
             totals["subtotal"] = float(subtotal)
-            totals["coupon_amount"] = float(order.coupon.amount) if order.coupon else 0.0
+            totals["coupon_amount"] = (
+                float(order.coupon.amount) if order.coupon else 0.0
+            )
         else:
             notes.append("No active order.")
 
@@ -584,7 +600,9 @@ class AdminOrderListAPIView(APIView):
         qs = (
             Order.objects.all()
             .prefetch_related("items__item", "status_history")
-            .select_related("user", "shipping_address", "billing_address", "payment", "coupon")
+            .select_related(
+                "user", "shipping_address", "billing_address", "payment", "coupon"
+            )
             .order_by("-id")
         )
 
@@ -597,7 +615,9 @@ class AdminOrderListAPIView(APIView):
             try:
                 qs = qs.filter(user_id=int(user_id))
             except (TypeError, ValueError):
-                return Response({"detail": "Invalid user_id."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Invalid user_id."}, status=status.HTTP_400_BAD_REQUEST
+                )
 
         ordered_param = request.query_params.get("ordered")
         if ordered_param is not None and ordered_param != "":
@@ -607,7 +627,10 @@ class AdminOrderListAPIView(APIView):
             elif val in ("false", "0", "no"):
                 qs = qs.filter(ordered=False)
             else:
-                return Response({"detail": "Invalid ordered param (use true/false)."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Invalid ordered param (use true/false)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         q = request.query_params.get("q")
         if q:
@@ -636,7 +659,9 @@ class AdminOrderDetailAPIView(APIView):
         order = (
             Order.objects.filter(pk=order_id)
             .prefetch_related("items__item", "status_history")
-            .select_related("user", "shipping_address", "billing_address", "payment", "coupon")
+            .select_related(
+                "user", "shipping_address", "billing_address", "payment", "coupon"
+            )
             .first()
         )
         if not order:
@@ -713,7 +738,10 @@ class AdminOrderStatusTransitionAPIView(APIView):
                     idempotency_key=f"admin-restock:{order.id}:{idempotency_key or target_status}",
                 )
         except Exception as e:
-            return Response({"detail": f"Inventory operation failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": f"Inventory operation failed: {e}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             history = order.transition_status(
@@ -753,13 +781,22 @@ class DummyPaymentSimulateAPIView(APIView):
         """Simulate payment for current user's active order (dummy mode only)."""
         if get_payment_mode() != "dummy":
             return Response(
-                {"detail": "Dummy simulation is only available when payment mode is 'dummy'."},
+                {
+                    "detail": "Dummy simulation is only available when payment mode is 'dummy'."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        order = Order.objects.filter(user=request.user, ordered=False).order_by("-id").first()
+        order = (
+            Order.objects.filter(user=request.user, ordered=False)
+            .order_by("-id")
+            .first()
+        )
         if not order:
-            return Response({"detail": "No active order to pay."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No active order to pay."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         ser = DummyPaymentSimulateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -776,7 +813,10 @@ class DummyPaymentSimulateAPIView(APIView):
                 idempotency_key=f"api-dummy-reserve:{order.id}:{idem or 'default'}",
             )
         except Exception as e:
-            return Response({"detail": f"Unable to reserve inventory: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": f"Unable to reserve inventory: {e}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         result = attempt_payment_for_order(
             order=order,
@@ -804,7 +844,10 @@ class DummyPaymentSimulateAPIView(APIView):
                     performed_by=request.user,
                     reason="Payment succeeded (dummy)",
                     idempotency_key=f"api-dummy-paid:{order.id}:{result.payment.idempotency_key}",
-                    metadata={"payment_id": result.payment.id, "provider_reference": result.provider_reference},
+                    metadata={
+                        "payment_id": result.payment.id,
+                        "provider_reference": result.provider_reference,
+                    },
                 )
             except Exception:
                 order.save()

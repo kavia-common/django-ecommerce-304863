@@ -2,7 +2,9 @@ import pytest
 
 
 @pytest.mark.django_db
-def test_jwt_obtain_refresh_verify_and_protected_endpoint(api_client, user, user_password):
+def test_jwt_obtain_refresh_verify_and_protected_endpoint(
+    api_client, user, user_password
+):
     # Obtain
     resp = api_client.post(
         "/api/auth/jwt/create/",
@@ -17,11 +19,15 @@ def test_jwt_obtain_refresh_verify_and_protected_endpoint(api_client, user, user
     refresh = tokens["refresh"]
 
     # Verify
-    verify_resp = api_client.post("/api/auth/jwt/verify/", {"token": access}, format="json")
+    verify_resp = api_client.post(
+        "/api/auth/jwt/verify/", {"token": access}, format="json"
+    )
     assert verify_resp.status_code == 200
 
     # Refresh
-    refresh_resp = api_client.post("/api/auth/jwt/refresh/", {"refresh": refresh}, format="json")
+    refresh_resp = api_client.post(
+        "/api/auth/jwt/refresh/", {"refresh": refresh}, format="json"
+    )
     assert refresh_resp.status_code == 200
     refreshed = refresh_resp.json()
     assert "access" in refreshed and refreshed["access"]
@@ -39,5 +45,7 @@ def test_jwt_obtain_refresh_verify_and_protected_endpoint(api_client, user, user
 
 @pytest.mark.django_db
 def test_jwt_verify_rejects_invalid_token(api_client):
-    bad = api_client.post("/api/auth/jwt/verify/", {"token": "not-a-jwt"}, format="json")
+    bad = api_client.post(
+        "/api/auth/jwt/verify/", {"token": "not-a-jwt"}, format="json"
+    )
     assert bad.status_code == 401

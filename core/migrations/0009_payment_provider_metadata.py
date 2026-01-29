@@ -3,7 +3,9 @@ from django.db import migrations, models
 
 def backfill_provider_reference(apps, schema_editor):
     Payment = apps.get_model("core", "Payment")
-    for p in Payment.objects.all().only("id", "stripe_charge_id", "provider_reference", "provider"):
+    for p in Payment.objects.all().only(
+        "id", "stripe_charge_id", "provider_reference", "provider"
+    ):
         if (not p.provider_reference) and p.stripe_charge_id:
             p.provider_reference = p.stripe_charge_id
         if not p.provider:
@@ -66,7 +68,11 @@ class Migration(migrations.Migration):
             model_name="payment",
             name="status",
             field=models.CharField(
-                choices=[("PENDING", "Pending"), ("SUCCEEDED", "Succeeded"), ("FAILED", "Failed")],
+                choices=[
+                    ("PENDING", "Pending"),
+                    ("SUCCEEDED", "Succeeded"),
+                    ("FAILED", "Failed"),
+                ],
                 db_index=True,
                 default="PENDING",
                 max_length=16,

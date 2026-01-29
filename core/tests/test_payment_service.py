@@ -13,7 +13,9 @@ def test_dummy_payment_simulate_success_commits_inventory_and_sets_paid(
     user,
 ):
     item = item_factory(stock_on_hand=5, stock_reserved=0, price=10.0)
-    order, oi = order_factory(user=user, item=item, quantity=2, status=Order.Status.CREATED, ordered=False)
+    order, oi = order_factory(
+        user=user, item=item, quantity=2, status=Order.Status.CREATED, ordered=False
+    )
 
     before_adj = InventoryAdjustment.objects.count()
     resp = api_client.post(
@@ -46,7 +48,9 @@ def test_dummy_payment_simulate_failure_releases_reservation(
     user,
 ):
     item = item_factory(stock_on_hand=5, stock_reserved=0, price=10.0)
-    order, oi = order_factory(user=user, item=item, quantity=2, status=Order.Status.CREATED, ordered=False)
+    order, oi = order_factory(
+        user=user, item=item, quantity=2, status=Order.Status.CREATED, ordered=False
+    )
 
     resp = api_client.post(
         "/api/me/payments/dummy/simulate/",
@@ -65,15 +69,22 @@ def test_dummy_payment_simulate_failure_releases_reservation(
     assert order.status == Order.Status.CREATED
     # Reservation should have been released
     assert item.stock_reserved == 0
-    assert oi.quantity_reserved in (0, oi.quantity_reserved)  # should be 0, but be tolerant if no reservation was made
+    assert oi.quantity_reserved in (
+        0,
+        oi.quantity_reserved,
+    )  # should be 0, but be tolerant if no reservation was made
 
 
 @pytest.mark.django_db
-def test_payment_service_idempotency_dummy_mode(item_factory, order_factory, user, settings):
+def test_payment_service_idempotency_dummy_mode(
+    item_factory, order_factory, user, settings
+):
     settings.PAYMENT_MODE = "dummy"
 
     item = item_factory(price=12.0)
-    order, _oi = order_factory(user=user, item=item, quantity=1, status=Order.Status.CREATED, ordered=False)
+    order, _oi = order_factory(
+        user=user, item=item, quantity=1, status=Order.Status.CREATED, ordered=False
+    )
 
     r1 = attempt_payment_for_order(
         order=order,
@@ -98,7 +109,9 @@ def test_payment_service_idempotency_dummy_mode(item_factory, order_factory, use
 
 
 @pytest.mark.django_db
-def test_payment_service_stripe_mode_is_mocked(monkeypatch, item_factory, order_factory, user, settings):
+def test_payment_service_stripe_mode_is_mocked(
+    monkeypatch, item_factory, order_factory, user, settings
+):
     # Force stripe mode and satisfy configuration checks.
     settings.PAYMENT_MODE = "stripe"
     settings.STRIPE_SECRET_KEY = "sk_test_xxx"
@@ -117,7 +130,9 @@ def test_payment_service_stripe_mode_is_mocked(monkeypatch, item_factory, order_
     monkeypatch.setattr(stripe_module.Charge, "create", fake_create, raising=True)
 
     item = item_factory(price=20.0)
-    order, _oi = order_factory(user=user, item=item, quantity=1, status=Order.Status.CREATED, ordered=False)
+    order, _oi = order_factory(
+        user=user, item=item, quantity=1, status=Order.Status.CREATED, ordered=False
+    )
 
     result = attempt_payment_for_order(
         order=order,

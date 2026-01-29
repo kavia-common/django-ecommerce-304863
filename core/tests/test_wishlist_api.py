@@ -8,16 +8,22 @@ def test_wishlist_requires_auth(api_client):
 
 
 @pytest.mark.django_db
-def test_wishlist_add_list_remove_idempotent(api_client, item_factory, auth_headers_for_user):
+def test_wishlist_add_list_remove_idempotent(
+    api_client, item_factory, auth_headers_for_user
+):
     item = item_factory()
 
     # Add first time => 201
-    resp = api_client.post("/api/wishlist/", {"item_id": item.id}, format="json", **auth_headers_for_user)
+    resp = api_client.post(
+        "/api/wishlist/", {"item_id": item.id}, format="json", **auth_headers_for_user
+    )
     assert resp.status_code == 201
     assert resp.json()["item_id"] == item.id
 
     # Add again => 200 (idempotent)
-    resp2 = api_client.post("/api/wishlist/", {"item_id": item.id}, format="json", **auth_headers_for_user)
+    resp2 = api_client.post(
+        "/api/wishlist/", {"item_id": item.id}, format="json", **auth_headers_for_user
+    )
     assert resp2.status_code == 200
     assert resp2.json()["item_id"] == item.id
 
@@ -40,7 +46,9 @@ def test_wishlist_add_list_remove_idempotent(api_client, item_factory, auth_head
 
 
 @pytest.mark.django_db
-def test_wishlist_user_scoped(api_client, item_factory, obtain_jwt_tokens, user, user_password):
+def test_wishlist_user_scoped(
+    api_client, item_factory, obtain_jwt_tokens, user, user_password
+):
     item = item_factory()
 
     # Second user
@@ -53,7 +61,9 @@ def test_wishlist_user_scoped(api_client, item_factory, obtain_jwt_tokens, user,
     tokens_other = obtain_jwt_tokens(other, "other_pass")
     hdr_other = {"HTTP_AUTHORIZATION": f"Bearer {tokens_other['access']}"}
 
-    hdr_user = {"HTTP_AUTHORIZATION": f"Bearer {obtain_jwt_tokens(user, user_password)['access']}"}
+    hdr_user = {
+        "HTTP_AUTHORIZATION": f"Bearer {obtain_jwt_tokens(user, user_password)['access']}"
+    }
 
     api_client.post("/api/wishlist/", {"item_id": item.id}, format="json", **hdr_user)
 

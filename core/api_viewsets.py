@@ -29,14 +29,11 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet, ViewSet
+from rest_framework.viewsets import ModelViewSet, ViewSet
 
 from core.api_serializers import (
     ProductSerializer,
-    ReviewAdminSerializer,
-    ReviewModerationSerializer,
     ReviewPublicSerializer,
-    ReviewWriteSerializer,
     WishlistAddSerializer,
     WishlistItemSerializer,
 )
@@ -87,7 +84,9 @@ class ProductViewSet(ModelViewSet):
 
         qs = qs.annotate(
             average_rating=Avg("reviews__rating", filter=Q(reviews__is_approved=True)),
-            review_count=Count("reviews__id", filter=Q(reviews__is_approved=True), distinct=True),
+            review_count=Count(
+                "reviews__id", filter=Q(reviews__is_approved=True), distinct=True
+            ),
         )
 
         # Restrict public list/retrieve to active products.
@@ -98,7 +97,10 @@ class ProductViewSet(ModelViewSet):
             is_adminish = bool(
                 user
                 and getattr(user, "is_authenticated", False)
-                and (getattr(user, "is_superuser", False) or user.groups.filter(name="Admin").exists())
+                and (
+                    getattr(user, "is_superuser", False)
+                    or user.groups.filter(name="Admin").exists()
+                )
             )
             if not is_adminish:
                 qs = qs.filter(is_active=True)
@@ -124,7 +126,11 @@ class ProductViewSet(ModelViewSet):
           - This is public read-only.
         """
         item = self.get_object()
-        qs = Review.objects.filter(item=item, is_approved=True).select_related("user", "item").order_by("-created_at", "-id")
+        qs = (
+            Review.objects.filter(item=item, is_approved=True)
+            .select_related("user", "item")
+            .order_by("-created_at", "-id")
+        )
 
         # Basic DRF pagination support.
         page = getattr(self, "paginator", None)
@@ -135,7 +141,9 @@ class ProductViewSet(ModelViewSet):
             page = self.paginator
 
         paged = page.paginate_queryset(qs, request, view=self)
-        serializer = ReviewPublicSerializer(paged if paged is not None else qs, many=True)
+        serializer = ReviewPublicSerializer(
+            paged if paged is not None else qs, many=True
+        )
         if paged is not None:
             return page.get_paginated_response(serializer.data)
         return Response(serializer.data)
@@ -206,7 +214,9 @@ class WishlistViewSet(ViewSet):
             page = self.paginator
 
         paged = page.paginate_queryset(qs, request, view=self)
-        serializer = WishlistItemSerializer(paged if paged is not None else qs, many=True)
+        serializer = WishlistItemSerializer(
+            paged if paged is not None else qs, many=True
+        )
         if paged is not None:
             return page.get_paginated_response(serializer.data)
         return Response(serializer.data)
@@ -221,19 +231,25 @@ class WishlistViewSet(ViewSet):
         # Ensure item exists (404 if not).
         item = Item.objects.filter(pk=item_id).first()
         if not item:
-            return Response({"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Item not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Idempotent insert; safe under concurrency.
         try:
             with transaction.atomic():
-                obj, created = WishlistItem.objects.get_or_create(user=request.user, item=item)
+                obj, created = WishlistItem.objects.get_or_create(
+                    user=request.user, item=item
+                )
         except IntegrityError:
             # In case of race, fetch the existing record.
             obj = WishlistItem.objects.get(user=request.user, item=item)
             created = False
 
         payload = WishlistItemSerializer(obj).data
-        return Response(payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        return Response(
+            payload, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        )
 
     # PUBLIC_INTERFACE
     def destroy(self, request, pk=None):
@@ -245,7 +261,9 @@ class WishlistViewSet(ViewSet):
         try:
             item_id = int(pk)
         except (TypeError, ValueError):
-            return Response({"detail": "Invalid item id."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid item id."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         WishlistItem.objects.filter(user=request.user, item_id=item_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

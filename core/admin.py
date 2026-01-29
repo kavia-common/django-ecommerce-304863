@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import uuid
-
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -39,7 +37,10 @@ def _is_admin_user(user) -> bool:
     return bool(
         user
         and getattr(user, "is_authenticated", False)
-        and (getattr(user, "is_superuser", False) or user.groups.filter(name="Admin").exists())
+        and (
+            getattr(user, "is_superuser", False)
+            or user.groups.filter(name="Admin").exists()
+        )
     )
 
 
@@ -84,7 +85,9 @@ def activate_items(modeladmin, request, queryset):
     """Activate selected products (is_active=True)."""
     _assert_admin(request)
     updated = queryset.update(is_active=True)
-    modeladmin.message_user(request, f"Activated {updated} item(s).", level=messages.SUCCESS)
+    modeladmin.message_user(
+        request, f"Activated {updated} item(s).", level=messages.SUCCESS
+    )
 
 
 # PUBLIC_INTERFACE
@@ -92,7 +95,9 @@ def deactivate_items(modeladmin, request, queryset):
     """Deactivate selected products (is_active=False)."""
     _assert_admin(request)
     updated = queryset.update(is_active=False)
-    modeladmin.message_user(request, f"Deactivated {updated} item(s).", level=messages.SUCCESS)
+    modeladmin.message_user(
+        request, f"Deactivated {updated} item(s).", level=messages.SUCCESS
+    )
 
 
 class LowStockListFilter(admin.SimpleListFilter):
@@ -108,9 +113,13 @@ class LowStockListFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         # Available stock is computed as (stock_on_hand - stock_reserved)
         if self.value() == "1":
-            return queryset.filter(stock_on_hand__lte=F("stock_reserved") + F("low_stock_threshold"))
+            return queryset.filter(
+                stock_on_hand__lte=F("stock_reserved") + F("low_stock_threshold")
+            )
         if self.value() == "0":
-            return queryset.exclude(stock_on_hand__lte=F("stock_reserved") + F("low_stock_threshold"))
+            return queryset.exclude(
+                stock_on_hand__lte=F("stock_reserved") + F("low_stock_threshold")
+            )
         return queryset
 
 
@@ -155,7 +164,20 @@ class ItemAdmin(AdminOnlyModelAdmin):
     readonly_fields = ["stock_reserved"]
 
     fieldsets = (
-        ("Catalog", {"fields": ("title", "slug", "sku", "category", "label", "image", "description")}),
+        (
+            "Catalog",
+            {
+                "fields": (
+                    "title",
+                    "slug",
+                    "sku",
+                    "category",
+                    "label",
+                    "image",
+                    "description",
+                )
+            },
+        ),
         ("Pricing", {"fields": ("price", "discount_price", "is_active")}),
         (
             "Inventory",
@@ -195,7 +217,9 @@ class InventoryAdjustmentAdmin(AdminOnlyModelAdmin):
             item = Item.objects.select_for_update().get(pk=obj.item_id)
             new_stock = int(item.stock_on_hand or 0) + int(obj.delta or 0)
             if new_stock < 0:
-                raise ValidationError("Inventory adjustment would make stock_on_hand negative.")
+                raise ValidationError(
+                    "Inventory adjustment would make stock_on_hand negative."
+                )
 
             # Save the adjustment only after we know it's valid.
             obj.created_by = request.user
@@ -217,7 +241,14 @@ admin.site.register(InventoryAdjustment, InventoryAdjustmentAdmin)
 class OrderStatusHistoryInline(admin.TabularInline):
     model = OrderStatusHistory
     extra = 0
-    fields = ("performed_at", "from_status", "to_status", "performed_by", "idempotency_key", "reason")
+    fields = (
+        "performed_at",
+        "from_status",
+        "to_status",
+        "performed_by",
+        "idempotency_key",
+        "reason",
+    )
     readonly_fields = fields
     ordering = ("-performed_at", "-id")
 
@@ -290,7 +321,10 @@ def _transition_orders(
                 performed_by=request.user,
                 reason=f"Admin bulk transition to {target_status}",
                 idempotency_key=idem,
-                metadata={"source": "django_admin", "performed_at": timezone.now().isoformat()},
+                metadata={
+                    "source": "django_admin",
+                    "performed_at": timezone.now().isoformat(),
+                },
             )
             success += 1
         except ValueError:
@@ -299,7 +333,11 @@ def _transition_orders(
             failed += 1
 
     if success:
-        modeladmin.message_user(request, f"Transitioned {success} order(s) to {target_status}.", level=messages.SUCCESS)
+        modeladmin.message_user(
+            request,
+            f"Transitioned {success} order(s) to {target_status}.",
+            level=messages.SUCCESS,
+        )
     if skipped:
         modeladmin.message_user(
             request,
@@ -317,37 +355,61 @@ def _transition_orders(
 # PUBLIC_INTERFACE
 def mark_paid(modeladmin, request, queryset):
     """Transition selected orders to PAID (reserve+commit inventory)."""
-    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.PAID, inventory_mode="paid")
+    return _transition_orders(
+        modeladmin,
+        request,
+        queryset,
+        target_status=Order.Status.PAID,
+        inventory_mode="paid",
+    )
 
 
 # PUBLIC_INTERFACE
 def mark_fulfilling(modeladmin, request, queryset):
     """Transition selected orders to FULFILLING."""
-    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.FULFILLING)
+    return _transition_orders(
+        modeladmin, request, queryset, target_status=Order.Status.FULFILLING
+    )
 
 
 # PUBLIC_INTERFACE
 def mark_shipped(modeladmin, request, queryset):
     """Transition selected orders to SHIPPED."""
-    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.SHIPPED)
+    return _transition_orders(
+        modeladmin, request, queryset, target_status=Order.Status.SHIPPED
+    )
 
 
 # PUBLIC_INTERFACE
 def mark_delivered(modeladmin, request, queryset):
     """Transition selected orders to DELIVERED."""
-    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.DELIVERED)
+    return _transition_orders(
+        modeladmin, request, queryset, target_status=Order.Status.DELIVERED
+    )
 
 
 # PUBLIC_INTERFACE
 def mark_cancelled(modeladmin, request, queryset):
     """Transition selected orders to CANCELLED (release reservations)."""
-    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.CANCELLED, inventory_mode="cancel")
+    return _transition_orders(
+        modeladmin,
+        request,
+        queryset,
+        target_status=Order.Status.CANCELLED,
+        inventory_mode="cancel",
+    )
 
 
 # PUBLIC_INTERFACE
 def mark_refunded(modeladmin, request, queryset):
     """Transition selected orders to REFUNDED (restock committed units)."""
-    return _transition_orders(modeladmin, request, queryset, target_status=Order.Status.REFUNDED, inventory_mode="refund")
+    return _transition_orders(
+        modeladmin,
+        request,
+        queryset,
+        target_status=Order.Status.REFUNDED,
+        inventory_mode="refund",
+    )
 
 
 class OrderAdmin(AdminOnlyModelAdmin):
@@ -384,7 +446,14 @@ class OrderAdmin(AdminOnlyModelAdmin):
     ]
     ordering = ["-id"]
     inlines = [OrderStatusHistoryInline]
-    actions = [mark_paid, mark_fulfilling, mark_shipped, mark_delivered, mark_cancelled, mark_refunded]
+    actions = [
+        mark_paid,
+        mark_fulfilling,
+        mark_shipped,
+        mark_delivered,
+        mark_cancelled,
+        mark_refunded,
+    ]
     readonly_fields = ["ref_code", "ordered_date", "start_date"]
 
     def get_urls(self):
@@ -463,8 +532,12 @@ class OrderAdmin(AdminOnlyModelAdmin):
                     idempotency_key=f"admin-restock:{idem}",
                 )
         except Exception as e:
-            self.message_user(request, f"Inventory operation failed: {e}", level=messages.ERROR)
-            return HttpResponseRedirect(reverse("admin:core_order_change", args=[order.pk]))
+            self.message_user(
+                request, f"Inventory operation failed: {e}", level=messages.ERROR
+            )
+            return HttpResponseRedirect(
+                reverse("admin:core_order_change", args=[order.pk])
+            )
 
         try:
             order.transition_status(
@@ -472,9 +545,16 @@ class OrderAdmin(AdminOnlyModelAdmin):
                 performed_by=request.user,
                 reason=f"Admin UI transition to {target_status}",
                 idempotency_key=idem,
-                metadata={"source": "django_admin_button", "performed_at": timezone.now().isoformat()},
+                metadata={
+                    "source": "django_admin_button",
+                    "performed_at": timezone.now().isoformat(),
+                },
             )
-            self.message_user(request, f"Order transitioned to {target_status}.", level=messages.SUCCESS)
+            self.message_user(
+                request,
+                f"Order transitioned to {target_status}.",
+                level=messages.SUCCESS,
+            )
         except ValueError as e:
             self.message_user(request, str(e), level=messages.WARNING)
         except Exception as e:
@@ -482,15 +562,25 @@ class OrderAdmin(AdminOnlyModelAdmin):
 
         return HttpResponseRedirect(reverse("admin:core_order_change", args=[order.pk]))
 
-    def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+    def render_change_form(
+        self, request, context, add=False, change=False, form_url="", obj=None
+    ):
         """
         Inject transition button URLs + allowed transitions into the template context.
         """
         if obj is not None and _is_admin_user(request.user):
             allowed_map = {
                 Order.Status.CREATED: [Order.Status.PAID, Order.Status.CANCELLED],
-                Order.Status.PAID: [Order.Status.FULFILLING, Order.Status.CANCELLED, Order.Status.REFUNDED],
-                Order.Status.FULFILLING: [Order.Status.SHIPPED, Order.Status.CANCELLED, Order.Status.REFUNDED],
+                Order.Status.PAID: [
+                    Order.Status.FULFILLING,
+                    Order.Status.CANCELLED,
+                    Order.Status.REFUNDED,
+                ],
+                Order.Status.FULFILLING: [
+                    Order.Status.SHIPPED,
+                    Order.Status.CANCELLED,
+                    Order.Status.REFUNDED,
+                ],
                 Order.Status.SHIPPED: [Order.Status.DELIVERED, Order.Status.REFUNDED],
                 Order.Status.DELIVERED: [Order.Status.REFUNDED],
                 Order.Status.CANCELLED: [],
@@ -498,12 +588,18 @@ class OrderAdmin(AdminOnlyModelAdmin):
             }
             allowed = allowed_map.get(obj.status, [])
             context["order_allowed_transitions"] = [
-                {"status": s, "url": reverse("admin:core_order_transition", args=[obj.pk, s])} for s in allowed
+                {
+                    "status": s,
+                    "url": reverse("admin:core_order_transition", args=[obj.pk, s]),
+                }
+                for s in allowed
             ]
         else:
             context["order_allowed_transitions"] = []
 
-        return super().render_change_form(request, context, add=add, change=change, form_url=form_url, obj=obj)
+        return super().render_change_form(
+            request, context, add=add, change=change, form_url=form_url, obj=obj
+        )
 
     @admin.display(description="Total")
     def total_amount(self, obj: Order) -> float:
@@ -516,7 +612,11 @@ class OrderAdmin(AdminOnlyModelAdmin):
     def payment_ref(self, obj: Order) -> str:
         if not obj.payment_id:
             return ""
-        return obj.payment.provider_reference or obj.payment.stripe_charge_id or str(obj.payment_id)
+        return (
+            obj.payment.provider_reference
+            or obj.payment.stripe_charge_id
+            or str(obj.payment_id)
+        )
 
 
 admin.site.register(Order, OrderAdmin)
@@ -540,7 +640,12 @@ class PaymentAdmin(AdminOnlyModelAdmin):
         "timestamp",
     ]
     list_filter = ["provider", "mode", "status", "timestamp"]
-    search_fields = ["user__username", "provider_reference", "idempotency_key", "stripe_charge_id"]
+    search_fields = [
+        "user__username",
+        "provider_reference",
+        "idempotency_key",
+        "stripe_charge_id",
+    ]
     ordering = ["-timestamp", "-id"]
 
 
@@ -568,7 +673,13 @@ admin.site.register(UserProfile, AdminOnlyModelAdmin)
 class WishlistItemAdmin(AdminOnlyModelAdmin):
     list_display = ["user", "item", "created_at"]
     list_filter = ["created_at"]
-    search_fields = ["user__username", "user__email", "item__title", "item__sku", "item__slug"]
+    search_fields = [
+        "user__username",
+        "user__email",
+        "item__title",
+        "item__sku",
+        "item__slug",
+    ]
     ordering = ["-created_at", "-id"]
     readonly_fields = ["user", "item", "created_at"]
 
@@ -617,7 +728,8 @@ class CouponRedemptionInline(admin.TabularInline):
     ordering = ("-created_at", "-id") if CouponRedemption else ("-id",)
     readonly_fields = (
         ("created_at",)
-        if CouponRedemption and any(f.name == "created_at" for f in CouponRedemption._meta.fields)
+        if CouponRedemption
+        and any(f.name == "created_at" for f in CouponRedemption._meta.fields)
         else ()
     )
 
@@ -641,7 +753,9 @@ def activate_coupons(modeladmin, request, queryset):
         )
         return
     updated = queryset.update(is_active=True)
-    modeladmin.message_user(request, f"Activated {updated} coupon(s).", level=messages.SUCCESS)
+    modeladmin.message_user(
+        request, f"Activated {updated} coupon(s).", level=messages.SUCCESS
+    )
 
 
 # PUBLIC_INTERFACE
@@ -657,7 +771,9 @@ def deactivate_coupons(modeladmin, request, queryset):
         )
         return
     updated = queryset.update(is_active=False)
-    modeladmin.message_user(request, f"Deactivated {updated} coupon(s).", level=messages.SUCCESS)
+    modeladmin.message_user(
+        request, f"Deactivated {updated} coupon(s).", level=messages.SUCCESS
+    )
 
 
 class CouponAdmin(AdminOnlyModelAdmin):
@@ -714,7 +830,9 @@ def approve_reviews(modeladmin, request, queryset):
     """Approve selected reviews (is_approved=True) (idempotent)."""
     _assert_admin(request)
     updated = queryset.filter(is_approved=False).update(is_approved=True)
-    modeladmin.message_user(request, f"Approved {updated} review(s).", level=messages.SUCCESS)
+    modeladmin.message_user(
+        request, f"Approved {updated} review(s).", level=messages.SUCCESS
+    )
 
 
 # PUBLIC_INTERFACE
@@ -722,7 +840,9 @@ def reject_reviews(modeladmin, request, queryset):
     """Reject selected reviews (is_approved=False) (idempotent)."""
     _assert_admin(request)
     updated = queryset.filter(is_approved=True).update(is_approved=False)
-    modeladmin.message_user(request, f"Rejected {updated} review(s).", level=messages.SUCCESS)
+    modeladmin.message_user(
+        request, f"Rejected {updated} review(s).", level=messages.SUCCESS
+    )
 
 
 class ReviewAdmin(AdminOnlyModelAdmin):
@@ -737,7 +857,14 @@ class ReviewAdmin(AdminOnlyModelAdmin):
         "updated_at",
     ]
     list_filter = ["is_approved", "rating", "created_at"]
-    search_fields = ["user__username", "user__email", "item__title", "item__sku", "title", "body"]
+    search_fields = [
+        "user__username",
+        "user__email",
+        "item__title",
+        "item__sku",
+        "title",
+        "body",
+    ]
     ordering = ["-created_at", "-id"]
     actions = [approve_reviews, reject_reviews]
     readonly_fields = ["created_at", "updated_at"]

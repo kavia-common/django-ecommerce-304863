@@ -15,7 +15,11 @@ from rest_framework.permissions import BasePermission
 
 
 def _is_authenticated(user) -> bool:
-    return bool(user and not isinstance(user, AnonymousUser) and getattr(user, "is_authenticated", False))
+    return bool(
+        user
+        and not isinstance(user, AnonymousUser)
+        and getattr(user, "is_authenticated", False)
+    )
 
 
 def _in_group(user, group_name: str) -> bool:

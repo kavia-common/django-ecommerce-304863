@@ -13,12 +13,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from core.api_serializers import (
-    ReviewAdminSerializer,
-    ReviewModerationSerializer,
-    ReviewPublicSerializer,
-    ReviewWriteSerializer,
-)
+from core.api_serializers import (ReviewAdminSerializer,
+                                  ReviewModerationSerializer,
+                                  ReviewPublicSerializer,
+                                  ReviewWriteSerializer)
 from core.models import Review
 from core.permissions import IsAdminGroupOrDjangoPermission
 
@@ -47,7 +45,10 @@ class ReviewViewSet(ModelViewSet):
         return bool(
             user
             and getattr(user, "is_authenticated", False)
-            and (getattr(user, "is_superuser", False) or user.groups.filter(name="Admin").exists())
+            and (
+                getattr(user, "is_superuser", False)
+                or user.groups.filter(name="Admin").exists()
+            )
         )
 
     def get_permissions(self):
@@ -154,11 +155,18 @@ class ReviewViewSet(ModelViewSet):
             if obj.is_approved:
                 from rest_framework.exceptions import PermissionDenied
 
-                raise PermissionDenied("Approved reviews cannot be deleted by users. Contact support.")
+                raise PermissionDenied(
+                    "Approved reviews cannot be deleted by users. Contact support."
+                )
         obj.delete()
 
     # PUBLIC_INTERFACE
-    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated, IsAdminGroupOrDjangoPermission], url_path="admin")
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[IsAuthenticated, IsAdminGroupOrDjangoPermission],
+        url_path="admin",
+    )
     def admin_list(self, request):
         """
         Admin-only list endpoint for all reviews.
@@ -166,7 +174,11 @@ class ReviewViewSet(ModelViewSet):
         Route:
           GET /api/reviews/admin/
         """
-        qs = Review.objects.all().select_related("user", "item").order_by("-created_at", "-id")
+        qs = (
+            Review.objects.all()
+            .select_related("user", "item")
+            .order_by("-created_at", "-id")
+        )
 
         page = getattr(self, "paginator", None)
         if page is None:
@@ -176,7 +188,9 @@ class ReviewViewSet(ModelViewSet):
             page = self.paginator
 
         paged = page.paginate_queryset(qs, request, view=self)
-        serializer = ReviewAdminSerializer(paged if paged is not None else qs, many=True)
+        serializer = ReviewAdminSerializer(
+            paged if paged is not None else qs, many=True
+        )
         if paged is not None:
             return page.get_paginated_response(serializer.data)
         return Response(serializer.data)

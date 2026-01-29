@@ -1,6 +1,6 @@
+import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
-import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
@@ -57,9 +57,35 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name="InventoryAdjustment",
             fields=[
-                ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("delta", models.IntegerField(help_text="Signed quantity change (e.g. +10 received, -1 sale).")),
-                ("reason", models.CharField(choices=[("RECEIVED", "Received"), ("SALE", "Sale"), ("RETURN", "Return"), ("DAMAGE", "Damage"), ("CORRECTION", "Correction"), ("OTHER", "Other")], max_length=24)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "delta",
+                    models.IntegerField(
+                        help_text="Signed quantity change (e.g. +10 received, -1 sale)."
+                    ),
+                ),
+                (
+                    "reason",
+                    models.CharField(
+                        choices=[
+                            ("RECEIVED", "Received"),
+                            ("SALE", "Sale"),
+                            ("RETURN", "Return"),
+                            ("DAMAGE", "Damage"),
+                            ("CORRECTION", "Correction"),
+                            ("OTHER", "Other"),
+                        ],
+                        max_length=24,
+                    ),
+                ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("note", models.TextField(blank=True, null=True)),
                 (

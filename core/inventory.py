@@ -23,7 +23,7 @@ All write operations lock Item rows with SELECT ... FOR UPDATE to avoid oversell
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -34,6 +34,7 @@ from core.models import InventoryAdjustment, Item, Order, OrderItem
 @dataclass(frozen=True)
 class InventoryActionResult:
     """Result for inventory operations."""
+
     changed: bool
     detail: str
 
@@ -70,7 +71,9 @@ def reserve_inventory_for_order(
 
     # We do not reserve for already-cancelled/refunded orders.
     if order.status in {Order.Status.CANCELLED, Order.Status.REFUNDED}:
-        return InventoryActionResult(changed=False, detail=f"Order status {order.status} not reservable.")
+        return InventoryActionResult(
+            changed=False, detail=f"Order status {order.status} not reservable."
+        )
 
     order_items: list[OrderItem] = list(order.items.select_related("item").all())
     if not order_items:
@@ -80,8 +83,7 @@ def reserve_inventory_for_order(
         # Lock items in a stable order to avoid deadlocks.
         item_ids = sorted({oi.item_id for oi in order_items})
         locked_items = {
-            it.id: it
-            for it in Item.objects.select_for_update().filter(id__in=item_ids)
+            it.id: it for it in Item.objects.select_for_update().filter(id__in=item_ids)
         }
 
         changed_any = False
@@ -125,7 +127,9 @@ def reserve_inventory_for_order(
 
         if changed_any:
             return InventoryActionResult(changed=True, detail="Reserved inventory.")
-        return InventoryActionResult(changed=False, detail="No reservation changes required (already reserved).")
+        return InventoryActionResult(
+            changed=False, detail="No reservation changes required (already reserved)."
+        )
 
 
 # PUBLIC_INTERFACE
@@ -153,8 +157,7 @@ def release_inventory_reservations_for_order(
     with transaction.atomic():
         item_ids = sorted({oi.item_id for oi in order_items})
         locked_items = {
-            it.id: it
-            for it in Item.objects.select_for_update().filter(id__in=item_ids)
+            it.id: it for it in Item.objects.select_for_update().filter(id__in=item_ids)
         }
 
         changed_any = False
@@ -179,7 +182,9 @@ def release_inventory_reservations_for_order(
 
         if changed_any:
             return InventoryActionResult(changed=True, detail=reason)
-        return InventoryActionResult(changed=False, detail="No reservations to release.")
+        return InventoryActionResult(
+            changed=False, detail="No reservations to release."
+        )
 
 
 # PUBLIC_INTERFACE
@@ -212,8 +217,7 @@ def commit_inventory_for_paid_order(
     with transaction.atomic():
         item_ids = sorted({oi.item_id for oi in order_items})
         locked_items = {
-            it.id: it
-            for it in Item.objects.select_for_update().filter(id__in=item_ids)
+            it.id: it for it in Item.objects.select_for_update().filter(id__in=item_ids)
         }
 
         changed_any = False
@@ -225,7 +229,9 @@ def commit_inventory_for_paid_order(
             _ensure_non_negative(committed, field="OrderItem.quantity_committed")
 
             if committed > reserved:
-                raise ValidationError("OrderItem.quantity_committed cannot exceed quantity_reserved.")
+                raise ValidationError(
+                    "OrderItem.quantity_committed cannot exceed quantity_reserved."
+                )
 
             delta_to_commit = reserved - committed
             if delta_to_commit <= 0:
@@ -258,8 +264,12 @@ def commit_inventory_for_paid_order(
             changed_any = True
 
         if changed_any:
-            return InventoryActionResult(changed=True, detail="Committed inventory for paid order.")
-        return InventoryActionResult(changed=False, detail="No inventory commit required (already committed).")
+            return InventoryActionResult(
+                changed=True, detail="Committed inventory for paid order."
+            )
+        return InventoryActionResult(
+            changed=False, detail="No inventory commit required (already committed)."
+        )
 
 
 # PUBLIC_INTERFACE
@@ -290,8 +300,7 @@ def restock_inventory_for_order_refund(
     with transaction.atomic():
         item_ids = sorted({oi.item_id for oi in order_items})
         locked_items = {
-            it.id: it
-            for it in Item.objects.select_for_update().filter(id__in=item_ids)
+            it.id: it for it in Item.objects.select_for_update().filter(id__in=item_ids)
         }
 
         changed_any = False
@@ -303,7 +312,9 @@ def restock_inventory_for_order_refund(
             _ensure_non_negative(restocked, field="OrderItem.quantity_restocked")
 
             if restocked > committed:
-                raise ValidationError("OrderItem.quantity_restocked cannot exceed quantity_committed.")
+                raise ValidationError(
+                    "OrderItem.quantity_restocked cannot exceed quantity_committed."
+                )
 
             delta_to_restock = committed - restocked
             if delta_to_restock <= 0:
@@ -326,5 +337,9 @@ def restock_inventory_for_order_refund(
             changed_any = True
 
         if changed_any:
-            return InventoryActionResult(changed=True, detail="Restocked inventory for refunded order.")
-        return InventoryActionResult(changed=False, detail="No restock required (already restocked).")
+            return InventoryActionResult(
+                changed=True, detail="Restocked inventory for refunded order."
+            )
+        return InventoryActionResult(
+            changed=False, detail="No restock required (already restocked)."
+        )

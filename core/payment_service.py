@@ -73,7 +73,9 @@ def _get_mode() -> str:
       2) Else if Stripe is configured, use stripe.
       3) Else default to dummy.
     """
-    configured = getattr(settings, "PAYMENT_MODE", None) or os.environ.get("PAYMENT_MODE")
+    configured = getattr(settings, "PAYMENT_MODE", None) or os.environ.get(
+        "PAYMENT_MODE"
+    )
     if configured:
         configured = configured.strip().lower()
         if configured not in {"dummy", "stripe"}:
@@ -93,12 +95,16 @@ def _dummy_outcome_settings() -> Tuple[str, float]:
     PAYMENT_DUMMY_FAIL_RATE:
       - float in [0,1] used only when outcome == random
     """
-    outcome = getattr(settings, "PAYMENT_DUMMY_OUTCOME", None) or os.environ.get("PAYMENT_DUMMY_OUTCOME", "success")
+    outcome = getattr(settings, "PAYMENT_DUMMY_OUTCOME", None) or os.environ.get(
+        "PAYMENT_DUMMY_OUTCOME", "success"
+    )
     outcome = str(outcome).strip().lower()
     if outcome not in {"success", "fail", "random"}:
         outcome = "success"
 
-    fail_rate = getattr(settings, "PAYMENT_DUMMY_FAIL_RATE", None) or os.environ.get("PAYMENT_DUMMY_FAIL_RATE", "0.0")
+    fail_rate = getattr(settings, "PAYMENT_DUMMY_FAIL_RATE", None) or os.environ.get(
+        "PAYMENT_DUMMY_FAIL_RATE", "0.0"
+    )
     try:
         fail_rate_f = float(fail_rate)
     except Exception:
@@ -122,7 +128,11 @@ def _create_or_get_payment_for_idempotency(
     This ensures safe retries do not create duplicate Payment records.
     """
     with transaction.atomic():
-        existing = Payment.objects.select_for_update().filter(idempotency_key=idempotency_key).first()
+        existing = (
+            Payment.objects.select_for_update()
+            .filter(idempotency_key=idempotency_key)
+            .first()
+        )
         if existing:
             return existing
 
@@ -290,7 +300,11 @@ def attempt_payment_for_order(
     try:
         if mode == "dummy":
             outcome_setting, fail_rate = _dummy_outcome_settings()
-            forced = (dummy_force_outcome or "").strip().lower() if dummy_force_outcome else None
+            forced = (
+                (dummy_force_outcome or "").strip().lower()
+                if dummy_force_outcome
+                else None
+            )
             if forced in {"success", "fail"}:
                 outcome = forced
             elif outcome_setting == "random":
@@ -304,7 +318,12 @@ def attempt_payment_for_order(
             raw = {**base_raw, "dummy": {"outcome": outcome, "fail_rate": fail_rate}}
 
             if outcome == "success":
-                payment = _finalize_success(order=order, payment=payment, provider_reference=provider_reference, raw=raw)
+                payment = _finalize_success(
+                    order=order,
+                    payment=payment,
+                    provider_reference=provider_reference,
+                    raw=raw,
+                )
                 return PaymentAttemptResult(
                     payment=payment,
                     code=PaymentResultCode.SUCCEEDED,
@@ -369,7 +388,9 @@ def attempt_payment_for_order(
 
         provider_reference = charge.get("id")
         raw = {**base_raw, "stripe": {"charge": dict(charge)}}
-        payment = _finalize_success(order=order, payment=payment, provider_reference=provider_reference, raw=raw)
+        payment = _finalize_success(
+            order=order, payment=payment, provider_reference=provider_reference, raw=raw
+        )
 
         return PaymentAttemptResult(
             payment=payment,
@@ -382,7 +403,10 @@ def attempt_payment_for_order(
     except Exception as e:
         # Catch-all; Stripe-specific exceptions are handled by caller in legacy flow,
         # but we want service to be robust and structured.
-        raw = {**base_raw, "exception": {"type": e.__class__.__name__, "message": str(e)}}
+        raw = {
+            **base_raw,
+            "exception": {"type": e.__class__.__name__, "message": str(e)},
+        }
         payment = _finalize_failure(
             payment=payment,
             provider_reference=payment.provider_reference,

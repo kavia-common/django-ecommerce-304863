@@ -62,12 +62,14 @@ class ProductSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
 
         # If annotated already, respect it.
-        if data.get("average_rating") is not None and data.get("review_count") is not None:
+        if (
+            data.get("average_rating") is not None
+            and data.get("review_count") is not None
+        ):
             return data
 
-        agg = (
-            Review.objects.filter(item=instance, is_approved=True)
-            .aggregate(avg=Avg("rating"), cnt=Count("id"))
+        agg = Review.objects.filter(item=instance, is_approved=True).aggregate(
+            avg=Avg("rating"), cnt=Count("id")
         )
         avg = agg.get("avg")
         cnt = agg.get("cnt") or 0
@@ -183,7 +185,9 @@ class ReviewWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"item_id": "Item not found."})
 
         # New reviews always require moderation.
-        review = Review.objects.create(user=user, item=item, is_approved=False, **validated_data)
+        review = Review.objects.create(
+            user=user, item=item, is_approved=False, **validated_data
+        )
         return review
 
     def update(self, instance, validated_data):
@@ -223,7 +227,15 @@ class ReviewAdminSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at", "item_id", "item_title", "user_id", "username"]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "item_id",
+            "item_title",
+            "user_id",
+            "username",
+        ]
 
 
 class ReviewModerationSerializer(serializers.Serializer):
