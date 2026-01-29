@@ -54,16 +54,27 @@ if DATABASE_URL:
 
         raise ImproperlyConfigured("Invalid DATABASE_URL. Expected postgres://USER:PASSWORD@HOST:PORT/NAME")
 else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql_psycopg2",
-            "NAME": config("DB_NAME"),
-            "USER": config("DB_USER"),
-            "PASSWORD": config("DB_PASSWORD"),
-            "HOST": config("DB_HOST"),
-            "PORT": "",
+    # If explicit DB_* vars are not provided, allow non-production preview to start
+    # (e.g., ephemeral environments running on sqlite). In true production, fail fast.
+    if (ENVIRONMENT or "").strip().lower() == "production":
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql_psycopg2",
+                "NAME": config("DB_NAME"),
+                "USER": config("DB_USER"),
+                "PASSWORD": config("DB_PASSWORD"),
+                "HOST": config("DB_HOST"),
+                "PORT": "",
+            }
         }
-    }
+    else:
+        # Preview/local fallback: use sqlite so the app can boot without external DB env.
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": os.path.join(BASE_DIR, "db.sqlite3"),
+            }
+        }
 
 # Stripe keys:
 # In this codebase, Stripe keys are referenced as STRIPE_* in base.py.

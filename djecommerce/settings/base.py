@@ -71,6 +71,8 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "crispy_forms",
+    # Needed for Bootstrap 4 template pack when using crispy-forms>=2.x
+    "crispy_bootstrap4",
     "django_countries",
     # DRF (API layer; does not affect template rendering)
     "rest_framework",
@@ -193,6 +195,7 @@ if env_bool("USE_X_FORWARDED_PROTO", default=False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # CRISPY FORMS
+CRISPY_ALLOWED_TEMPLATE_PACKS = ("bootstrap4",)
 CRISPY_TEMPLATE_PACK = "bootstrap4"
 
 # Logging (gunicorn-friendly)

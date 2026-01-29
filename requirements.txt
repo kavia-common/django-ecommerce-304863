@@ -2,25 +2,35 @@ autopep8==1.4.4
 certifi==2019.3.9
 chardet==3.0.4
 defusedxml==0.6.0
-Django==2.2.14
-django-allauth==0.39.1
-django-countries==5.3.3
-django-crispy-forms==1.7.2
-django-cors-headers==3.10.1
-django-debug-toolbar==1.10.1
-django-filter==2.4.0
-djangorestframework==3.11.2
-djangorestframework-simplejwt==4.6.0
-idna==2.8
+
+# Python 3.12 compatible Django stack (Django 2.2 cannot run on Python 3.12)
+Django==4.2.10
+djangorestframework==3.14.0
+djangorestframework-simplejwt==5.3.1
+django-filter==23.5
+
+# Auth / Allauth (older allauth used django.utils.six which breaks on modern runtimes)
+django-allauth==0.61.1
+python3-openid==3.1.0
 oauthlib==3.0.1
+requests==2.21.0
+requests-oauthlib==1.2.0
+
+# UI / forms
+django-crispy-forms==2.1
+crispy-bootstrap4==2024.1
+django-countries==5.3.3
+
+# Middleware / tooling
+django-cors-headers==4.3.1
+django-debug-toolbar==4.2.0
+
+idna==2.8
 pep8==1.7.1
 Pillow==6.2.2
 pycodestyle==2.5.0
 python-decouple==3.1
-python3-openid==3.1.0
 pytz==2018.5
-requests==2.21.0
-requests-oauthlib==1.2.0
 sqlparse==0.2.4
 stripe==2.27.0
 urllib3==1.24.2
