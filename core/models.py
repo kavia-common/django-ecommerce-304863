@@ -252,6 +252,40 @@ class Item(models.Model):
         return self.image
 
 
+class WishlistEntry(models.Model):
+    """Wishlist entry connecting a user to an Item.
+
+    We use an explicit through model instead of a ManyToManyField to:
+    - enforce uniqueness (no duplicate wishlist rows)
+    - support future metadata (added_at, notes, etc.)
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="wishlist_entries",
+    )
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="wishlisted_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_wishlist_user_item"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["item"]),
+        ]
+        ordering = ["-created_at", "id"]
+
+    def __str__(self):
+        return f"{self.user_id}:{self.item_id}"
+
+
 class OrderItem(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE)

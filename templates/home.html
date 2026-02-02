@@ -101,13 +101,22 @@
                 </h4>
 
                 {% if item.track_inventory %}
-                  <p class="text-muted mb-0">
+                  <p class="text-muted mb-2">
                     {% if item.stock_quantity > 0 %}
                       In stock: {{ item.stock_quantity }}
                     {% else %}
                       Out of stock
                     {% endif %}
                   </p>
+                {% endif %}
+
+                {% if request.user.is_authenticated %}
+                  <a
+                    href="{% url 'core:wishlist-toggle' item.slug %}?next={{ request.path }}"
+                    class="btn btn-sm btn-outline-primary"
+                  >
+                    Wishlist
+                  </a>
                 {% endif %}
 
               </div>

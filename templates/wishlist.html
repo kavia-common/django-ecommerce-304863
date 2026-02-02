@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<main>
+  <div class="container mt-5 pt-4">
+    <h2 class="mb-4">My Wishlist ({{ count }})</h2>
+
+    {% if items %}
+      <div class="row">
+        {% for item in items %}
+          <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card">
+              <div class="view overlay">
+                {% if item.primary_image %}
+                  <img src="{{ item.primary_image.url }}" class="card-img-top" alt="{{ item.title }}">
+                {% else %}
+                  <img src="{{ item.image.url }}" class="card-img-top" alt="{{ item.title }}">
+                {% endif %}
+                <a href="{{ item.get_absolute_url }}">
+                  <div class="mask rgba-white-slight"></div>
+                </a>
+              </div>
+
+              <div class="card-body text-center">
+                <h5 class="mb-2">
+                  <a href="{{ item.get_absolute_url }}" class="dark-grey-text">{{ item.title }}</a>
+                </h5>
+
+                <p class="mb-2 font-weight-bold blue-text">
+                  {% if item.discount_price %}
+                    ${{ item.discount_price }}
+                  {% else %}
+                    ${{ item.price }}
+                  {% endif %}
+                </p>
+
+                <a
+                  href="{% url 'core:wishlist-toggle' item.slug %}?next={{ request.path }}"
+                  class="btn btn-sm btn-outline-danger"
+                >
+                  Remove
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-muted">Your wishlist is empty.</p>
+      <a href="{% url 'core:home' %}" class="btn btn-primary">Browse products</a>
+    {% endif %}
+  </div>
+</main>
+{% endblock content %}

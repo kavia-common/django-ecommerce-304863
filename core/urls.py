@@ -26,6 +26,12 @@ from .api_views import (
     api_my_orders,
     api_me,
 )
+from .api_wishlist import (
+    api_wishlist_add,
+    api_wishlist_list,
+    api_wishlist_remove,
+)
+from .wishlist_views import wishlist_list, wishlist_toggle
 
 app_name = 'core'
 
@@ -43,6 +49,10 @@ urlpatterns = [
     path('payment/<payment_option>/', PaymentView.as_view(), name='payment'),
     path('request-refund/', RequestRefundView.as_view(), name='request-refund'),
 
+    # Wishlist (template/session auth)
+    path('wishlist/', wishlist_list, name='wishlist'),
+    path('wishlist/toggle/<slug>/', wishlist_toggle, name='wishlist-toggle'),
+
     # Stripe webhook (signature verified if STRIPE_WEBHOOK_SECRET is set)
     path('stripe/webhook/', stripe_webhook, name='stripe-webhook'),
 
@@ -56,6 +66,11 @@ urlpatterns = [
     # API: basic + user
     path('api/me/', api_me, name='api-me'),
     path('api/orders/me/', api_my_orders, name='api-my-orders'),
+
+    # API: wishlist (JWT/session auth via DRF auth classes; requires authenticated)
+    path('api/wishlist/', api_wishlist_list, name='api-wishlist-list'),
+    path('api/wishlist/add/', api_wishlist_add, name='api-wishlist-add'),
+    path('api/wishlist/remove/', api_wishlist_remove, name='api-wishlist-remove'),
 
     # API: admin (JWT + admin role)
     path('api/admin/items/', api_admin_items, name='api-admin-items'),
