@@ -10,6 +10,7 @@ RBAC enforcement:
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -108,29 +109,40 @@ def api_admin_item_detail(request, item_id: int):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsAdminRole])
 def api_admin_inventory_adjust(request):
-    """Admin-only: inventory adjustment endpoint.
+    """Admin-only: inventory adjustment endpoint (legacy compatibility).
 
-    The template project does not yet track stock in the DB schema, so this endpoint
-    currently validates RBAC and payload and returns an informative response.
+    Applies stock delta to Item.stock_quantity atomically with row locking and prevents negative stock.
 
-    This prevents "inventory adjustment" actions from being exposed to non-admins,
-    while keeping the existing storefront unchanged.
+    Request:
+        {"item_id": 123, "delta": -2}
+
+    Response:
+        {"item_id": 123, "stock_quantity": 10, "delta": -2}
     """
     payload = InventoryAdjustRequest(data=request.data)
     payload.is_valid(raise_exception=True)
 
-    item = get_object_or_404(Item, pk=payload.validated_data["item_id"])
-    delta = payload.validated_data["delta"]
+    item_id = payload.validated_data["item_id"]
+    delta = int(payload.validated_data["delta"])
 
-    # No stock field exists yet; respond with a safe message.
-    return Response(
-        {
-            "detail": "Inventory adjustment accepted (no stock field in current schema).",
-            "item_id": item.id,
-            "delta": delta,
-        },
-        status=status.HTTP_200_OK,
-    )
+    with transaction.atomic():
+        item = get_object_or_404(Item.all_objects.select_for_update(), pk=item_id)
+        next_qty = int(item.stock_quantity) + delta
+        if next_qty < 0:
+            return Response(
+                {"detail": "Stock adjustment would result in negative stock.", "item_id": item.id},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        Item.all_objects.filter(pk=item.pk).update(stock_quantity=F("stock_quantity") + delta)
+        item.refresh_from_db(fields=["stock_quantity"])
+        return Response(
+            {
+                "item_id": item.id,
+                "stock_quantity": item.stock_quantity,
+                "delta": delta,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 # PUBLIC_INTERFACE

@@ -65,8 +65,19 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ["title", "sku", "active", "price", "discount_price", "category", "category_obj", "updated_at"]
-    list_filter = ["active", "category", "category_obj"]
+    list_display = [
+        "title",
+        "sku",
+        "active",
+        "track_inventory",
+        "stock_quantity",
+        "price",
+        "discount_price",
+        "category",
+        "category_obj",
+        "updated_at",
+    ]
+    list_filter = ["active", "track_inventory", "category", "category_obj"]
     search_fields = ["title", "sku", "slug", "description"]
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ["created_at", "updated_at"]

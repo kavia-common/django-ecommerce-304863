@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 from django.shortcuts import redirect
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
@@ -46,6 +47,15 @@ class CheckoutView(View):
     def get(self, *args, **kwargs):
         try:
             order = Order.objects.get(user=self.request.user, ordered=False)
+
+            # Validate cart quantities against current stock before checkout.
+            for oi in order.items.select_related("item").all():
+                try:
+                    oi.item.ensure_can_fulfill(oi.quantity)
+                except ValueError as e:
+                    messages.warning(self.request, str(e))
+                    return redirect("core:order-summary")
+
             form = CheckoutForm()
             context = {
                 'form': form,
@@ -80,6 +90,15 @@ class CheckoutView(View):
         form = CheckoutForm(self.request.POST or None)
         try:
             order = Order.objects.get(user=self.request.user, ordered=False)
+
+            # Re-validate cart quantities against current stock before accepting addresses.
+            for oi in order.items.select_related("item").all():
+                try:
+                    oi.item.ensure_can_fulfill(oi.quantity)
+                except ValueError as e:
+                    messages.warning(self.request, str(e))
+                    return redirect("core:order-summary")
+
             if form.is_valid():
 
                 use_default_shipping = form.cleaned_data.get(
@@ -214,6 +233,15 @@ class CheckoutView(View):
 class PaymentView(View):
     def get(self, *args, **kwargs):
         order = Order.objects.get(user=self.request.user, ordered=False)
+
+        # Validate cart quantities against current stock before showing payment.
+        for oi in order.items.select_related("item").all():
+            try:
+                oi.item.ensure_can_fulfill(oi.quantity)
+            except ValueError as e:
+                messages.warning(self.request, str(e))
+                return redirect("core:order-summary")
+
         if order.billing_address:
             context = {
                 'order': order,
@@ -242,6 +270,15 @@ class PaymentView(View):
 
     def post(self, *args, **kwargs):
         order = Order.objects.get(user=self.request.user, ordered=False)
+
+        # Re-validate cart quantities against current stock right before charging.
+        for oi in order.items.select_related("item").all():
+            try:
+                oi.item.ensure_can_fulfill(oi.quantity)
+            except ValueError as e:
+                messages.warning(self.request, str(e))
+                return redirect("core:order-summary")
+
         form = PaymentForm(self.request.POST)
         userprofile = UserProfile.objects.get(user=self.request.user)
         if form.is_valid():
@@ -283,27 +320,36 @@ class PaymentView(View):
                         source=token
                     )
 
-                # create the payment
-                payment = Payment()
-                payment.stripe_charge_id = charge['id']
-                payment.user = self.request.user
-                payment.amount = order.get_total()
-                payment.save()
+                # Only after Stripe confirms payment do we reserve/decrement stock.
+                # Use a DB transaction + row locking to prevent oversell.
+                with transaction.atomic():
+                    Item.atomic_decrement_stock_for_order(order)
 
-                # assign the payment to the order
+                    # create the payment
+                    payment = Payment()
+                    payment.stripe_charge_id = charge['id']
+                    payment.user = self.request.user
+                    payment.amount = order.get_total()
+                    payment.save()
 
-                order_items = order.items.all()
-                order_items.update(ordered=True)
-                for item in order_items:
-                    item.save()
+                    # assign the payment to the order
+                    order_items = order.items.all()
+                    order_items.update(ordered=True)
+                    for item in order_items:
+                        item.save()
 
-                order.ordered = True
-                order.payment = payment
-                order.ref_code = create_ref_code()
-                order.save()
+                    order.ordered = True
+                    order.payment = payment
+                    order.ref_code = create_ref_code()
+                    order.save()
 
                 messages.success(self.request, "Your order was successful!")
                 return redirect("/")
+
+            except ValueError as e:
+                # Stock issues detected at finalize time (another buyer may have taken stock)
+                messages.warning(self.request, str(e))
+                return redirect("core:order-summary")
 
             except stripe.error.CardError as e:
                 body = e.json_body
@@ -382,6 +428,12 @@ class ItemDetailView(DetailView):
 @login_required
 def add_to_cart(request, slug):
     item = get_object_or_404(Item, slug=slug)
+
+    # Disallow adding when out of stock (when tracking inventory)
+    if item.track_inventory and item.stock_quantity <= 0:
+        messages.warning(request, "This item is out of stock.")
+        return redirect("core:product", slug=slug)
+
     order_item, created = OrderItem.objects.get_or_create(
         item=item,
         user=request.user,
@@ -392,11 +444,22 @@ def add_to_cart(request, slug):
         order = order_qs[0]
         # check if the order item is in the order
         if order.items.filter(item__slug=item.slug).exists():
-            order_item.quantity += 1
+            next_qty = order_item.quantity + 1
+            if item.track_inventory and next_qty > item.stock_quantity:
+                messages.warning(
+                    request,
+                    f"Only {item.stock_quantity} left in stock; you already have {order_item.quantity} in your cart.",
+                )
+                return redirect("core:order-summary")
+            order_item.quantity = next_qty
             order_item.save()
             messages.info(request, "This item quantity was updated.")
             return redirect("core:order-summary")
         else:
+            # First time adding: ensure at least 1 is allowed
+            if item.track_inventory and order_item.quantity > item.stock_quantity:
+                messages.warning(request, f"Only {item.stock_quantity} left in stock.")
+                return redirect("core:order-summary")
             order.items.add(order_item)
             messages.info(request, "This item was added to your cart.")
             return redirect("core:order-summary")

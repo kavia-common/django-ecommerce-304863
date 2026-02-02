@@ -14,6 +14,7 @@ Image handling:
 from __future__ import annotations
 
 from django.db import transaction
+from django.db.models import F
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -50,6 +51,8 @@ class ItemAdminSerializer(serializers.ModelSerializer):
             "title",
             "sku",
             "active",
+            "track_inventory",
+            "stock_quantity",
             "price",
             "discount_price",
             "category",
@@ -178,6 +181,70 @@ def api_admin_product_item_detail(request, item_id: int):
 
     item.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class InventoryResponseSerializer(serializers.Serializer):
+    """Response payload for inventory endpoints."""
+    item_id = serializers.IntegerField()
+    track_inventory = serializers.BooleanField()
+    stock_quantity = serializers.IntegerField()
+
+
+class InventoryAdjustSerializer(serializers.Serializer):
+    """Request payload for inventory adjustment."""
+    delta = serializers.IntegerField(help_text="Stock delta to apply (positive or negative).")
+
+
+# PUBLIC_INTERFACE
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def api_admin_product_inventory(request, item_id: int):
+    """Admin-only: get or adjust product inventory.
+
+    Route:
+        /api/admin/products/items/{id}/inventory/
+
+    GET:
+        Returns current stock fields.
+
+    POST:
+        Applies delta atomically with row locking and prevents negative stock.
+    """
+    if request.method == "GET":
+        item = get_object_or_404(Item.all_objects.all(), pk=item_id)
+        return Response(
+            InventoryResponseSerializer(
+                {
+                    "item_id": item.id,
+                    "track_inventory": item.track_inventory,
+                    "stock_quantity": item.stock_quantity,
+                }
+            ).data
+        )
+
+    payload = InventoryAdjustSerializer(data=request.data)
+    payload.is_valid(raise_exception=True)
+    delta = int(payload.validated_data["delta"])
+
+    with transaction.atomic():
+        item = get_object_or_404(Item.all_objects.select_for_update(), pk=item_id)
+        next_qty = int(item.stock_quantity) + delta
+        if next_qty < 0:
+            return Response(
+                {"detail": "Stock adjustment would result in negative stock.", "stock_quantity": item.stock_quantity},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        Item.all_objects.filter(pk=item.pk).update(stock_quantity=F("stock_quantity") + delta)
+        item.refresh_from_db(fields=["stock_quantity", "track_inventory"])
+        return Response(
+            InventoryResponseSerializer(
+                {
+                    "item_id": item.id,
+                    "track_inventory": item.track_inventory,
+                    "stock_quantity": item.stock_quantity,
+                }
+            ).data
+        )
 
 
 # PUBLIC_INTERFACE

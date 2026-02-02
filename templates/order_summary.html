@@ -25,7 +25,14 @@
             <td>
                 <a href="{% url 'core:remove-single-item-from-cart' order_item.item.slug %}"><i class="fas fa-minus mr-2"></i></a>
                 {{ order_item.quantity }}
-                <a href="{% url 'core:add-to-cart' order_item.item.slug %}"><i class="fas fa-plus ml-2"></i></a>
+                {% if order_item.item.track_inventory %}
+                  <small class="text-muted">(stock: {{ order_item.item.stock_quantity }})</small>
+                {% endif %}
+                {% if order_item.item.track_inventory and order_item.quantity >= order_item.item.stock_quantity %}
+                  <i class="fas fa-plus ml-2 text-muted" title="No more stock available"></i>
+                {% else %}
+                  <a href="{% url 'core:add-to-cart' order_item.item.slug %}"><i class="fas fa-plus ml-2"></i></a>
+                {% endif %}
             </td>
             <td>
             {% if order_item.item.discount_price %}

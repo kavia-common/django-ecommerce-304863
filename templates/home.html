@@ -100,6 +100,16 @@
                   </strong>
                 </h4>
 
+                {% if item.track_inventory %}
+                  <p class="text-muted mb-0">
+                    {% if item.stock_quantity > 0 %}
+                      In stock: {{ item.stock_quantity }}
+                    {% else %}
+                      Out of stock
+                    {% endif %}
+                  </p>
+                {% endif %}
+
               </div>
 
             </div>

@@ -20,6 +20,7 @@ from core.api_admin_products import (
     api_admin_product_category_detail,
     api_admin_product_items,
     api_admin_product_item_detail,
+    api_admin_product_inventory,
     api_admin_product_item_deactivate,
 )
 
@@ -49,6 +50,7 @@ urlpatterns = [
     path('api/admin/products/categories/<int:category_id>/', api_admin_product_category_detail, name='api_admin_product_category_detail'),
     path('api/admin/products/items/', api_admin_product_items, name='api_admin_product_items'),
     path('api/admin/products/items/<int:item_id>/', api_admin_product_item_detail, name='api_admin_product_item_detail'),
+    path('api/admin/products/items/<int:item_id>/inventory/', api_admin_product_inventory, name='api_admin_product_inventory'),
     path('api/admin/products/items/<int:item_id>/deactivate/', api_admin_product_item_deactivate, name='api_admin_product_item_deactivate'),
 
     path('', include('core.urls', namespace='core'))

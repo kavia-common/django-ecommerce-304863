@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save
 from django.conf import settings
-from django.db import models
-from django.db.models import Sum
+from django.db import models, transaction
+from django.db.models import F, Sum
 from django.shortcuts import reverse
 from django.utils import timezone
 from django.core.validators import MinValueValidator
@@ -113,6 +113,17 @@ class Item(models.Model):
     )
     active = models.BooleanField(default=True)
 
+    # Inventory fields
+    track_inventory = models.BooleanField(
+        default=True,
+        help_text="If true, prevent purchase when stock_quantity is insufficient.",
+    )
+    stock_quantity = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text="Available stock on hand (non-negative).",
+    )
+
     description = models.TextField()
 
     # Legacy image field (kept) + new primary_image field (preferred).
@@ -146,6 +157,78 @@ class Item(models.Model):
 
     def __str__(self):
         return self.title
+
+    def is_in_stock(self) -> bool:
+        """Return whether this item is available for purchase."""
+        if not self.track_inventory:
+            return True
+        return self.stock_quantity > 0
+
+    def available_stock(self) -> int:
+        """Return available stock quantity (0 if not tracking inventory)."""
+        if not self.track_inventory:
+            return 10**9
+        return int(self.stock_quantity)
+
+    # PUBLIC_INTERFACE
+    def ensure_can_fulfill(self, requested_qty: int) -> None:
+        """Validate that requested quantity can be fulfilled.
+
+        Raises:
+            ValueError: if requested_qty is invalid or exceeds available stock.
+        """
+        if requested_qty is None or int(requested_qty) <= 0:
+            raise ValueError("requested_qty must be a positive integer.")
+        if self.track_inventory and int(requested_qty) > int(self.stock_quantity):
+            raise ValueError(f"Insufficient stock for '{self.title}'. Available: {self.stock_quantity}.")
+
+    # PUBLIC_INTERFACE
+    @classmethod
+    def atomic_decrement_stock_for_order(cls, order: "Order") -> None:
+        """Atomically decrement stock for all items in an order.
+
+        This method prevents oversell by:
+        - locking the relevant Item rows (SELECT ... FOR UPDATE)
+        - validating each ordered quantity against current stock
+        - applying decrements with F() expressions inside a transaction
+
+        Args:
+            order: The Order (must be the not-yet-ordered cart being finalized).
+
+        Raises:
+            ValueError: if stock is insufficient for any item in the order.
+        """
+        # IMPORTANT: Must be called inside an outer transaction.atomic() block.
+        order_items = list(order.items.select_related("item").all())
+        item_ids = [oi.item_id for oi in order_items]
+
+        # Lock all involved Item rows deterministically to avoid deadlocks.
+        locked_items = (
+            cls.all_objects.select_for_update()
+            .filter(id__in=item_ids)
+            .order_by("id")
+        )
+        items_by_id = {it.id: it for it in locked_items}
+
+        # Validate and apply decrements.
+        for oi in order_items:
+            item = items_by_id[oi.item_id]
+            if not item.track_inventory:
+                continue
+            if oi.quantity > item.stock_quantity:
+                raise ValueError(
+                    f"Insufficient stock for '{item.title}'. Requested: {oi.quantity}, Available: {item.stock_quantity}."
+                )
+
+        for oi in order_items:
+            item = items_by_id[oi.item_id]
+            if not item.track_inventory:
+                continue
+            # Use F() to avoid race conditions.
+            cls.all_objects.filter(pk=item.pk).update(
+                stock_quantity=F("stock_quantity") - int(oi.quantity),
+                updated_at=timezone.now(),
+            )
 
     def get_absolute_url(self):
         return reverse("core:product", kwargs={
