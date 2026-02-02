@@ -12,6 +12,10 @@ from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from django.views.generic import ListView, DetailView, View
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
 from .forms import CheckoutForm, CouponForm, RefundForm, PaymentForm
 from .models import Item, OrderItem, Order, Address, Payment, Coupon, Refund, UserProfile
 
@@ -517,3 +521,29 @@ class RequestRefundView(View):
             except ObjectDoesNotExist:
                 messages.info(self.request, "This order does not exist.")
                 return redirect("core:request-refund")
+
+
+# PUBLIC_INTERFACE
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_me(request):
+    """Return basic identity information for the authenticated user.
+
+    This endpoint is intentionally minimal and exists to confirm that:
+    - JWT token obtain works (POST /api/auth/token/)
+    - Authorization header processing works (Bearer access token)
+    - DRF + SimpleJWT permissions enforce authentication
+
+    Returns:
+        JSON with user id, username, email, and staff/superuser flags.
+    """
+    user = request.user
+    return Response(
+        {
+            "id": user.id,
+            "username": user.get_username(),
+            "email": user.email,
+            "is_staff": user.is_staff,
+            "is_superuser": user.is_superuser,
+        }
+    )
