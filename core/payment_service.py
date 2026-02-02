@@ -13,7 +13,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from django.conf import settings
 from django.db import transaction
@@ -43,11 +43,11 @@ class PaymentAttemptResult:
     raw: Provider-specific raw payload/metadata (JSON-serializable).
     """
 
-    payment: Optional[Payment]
+    payment: Payment | None
     code: PaymentResultCode
     message: str
-    provider_reference: Optional[str]
-    raw: Dict[str, Any]
+    provider_reference: str | None
+    raw: dict[str, Any]
 
 
 def _is_stripe_configured() -> bool:
@@ -86,7 +86,7 @@ def _get_mode() -> str:
     return "stripe" if _is_stripe_configured() else "dummy"
 
 
-def _dummy_outcome_settings() -> Tuple[str, float]:
+def _dummy_outcome_settings() -> tuple[str, float]:
     """
     Read dummy outcome settings from environment/settings.
 
@@ -153,7 +153,7 @@ def _finalize_success(
     order: Order,
     payment: Payment,
     provider_reference: str,
-    raw: Dict[str, Any],
+    raw: dict[str, Any],
 ) -> Payment:
     """Mark payment succeeded and attach to order (idempotent)."""
     with transaction.atomic():
@@ -178,9 +178,9 @@ def _finalize_success(
 def _finalize_failure(
     *,
     payment: Payment,
-    provider_reference: Optional[str],
+    provider_reference: str | None,
     message: str,
-    raw: Dict[str, Any],
+    raw: dict[str, Any],
 ) -> Payment:
     """Mark payment failed with message (idempotent)."""
     with transaction.atomic():
@@ -199,10 +199,10 @@ def _stripe_charge(
     *,
     amount_cents: int,
     currency: str,
-    token: Optional[str],
-    customer_id: Optional[str],
+    token: str | None,
+    customer_id: str | None,
     idempotency_key: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Execute Stripe charge with safe retries via Stripe idempotency key.
 
@@ -212,7 +212,7 @@ def _stripe_charge(
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "amount": amount_cents,
         "currency": currency,
     }
@@ -240,11 +240,11 @@ def attempt_payment_for_order(
     user,
     amount: float,
     currency: str = "usd",
-    idempotency_key: Optional[str] = None,
-    stripe_token: Optional[str] = None,
-    stripe_customer_id: Optional[str] = None,
-    dummy_force_outcome: Optional[str] = None,
-    extra_metadata: Optional[Dict[str, Any]] = None,
+    idempotency_key: str | None = None,
+    stripe_token: str | None = None,
+    stripe_customer_id: str | None = None,
+    dummy_force_outcome: str | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> PaymentAttemptResult:
     """
     Attempt a payment for an order using the configured provider.
@@ -288,7 +288,7 @@ def attempt_payment_for_order(
             raw=payment.raw_metadata or {},
         )
 
-    base_raw: Dict[str, Any] = {
+    base_raw: dict[str, Any] = {
         "order_id": order.id,
         "amount": amount,
         "currency": currency,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from typing import Callable, Dict, Tuple
+from collections.abc import Callable
 
 import pytest
 from django.contrib.auth.models import Group, User
@@ -96,12 +96,12 @@ def admin_user_in_group(admin_user, admin_group) -> User:
 
 
 @pytest.fixture
-def obtain_jwt_tokens(api_client) -> Callable[[User, str], Dict[str, str]]:
+def obtain_jwt_tokens(api_client) -> Callable[[User, str], dict[str, str]]:
     """
     Obtain JWT tokens via the real SimpleJWT endpoint to cover that surface area.
     """
 
-    def _obtain(user_obj: User, password: str) -> Dict[str, str]:
+    def _obtain(user_obj: User, password: str) -> dict[str, str]:
         resp = api_client.post(
             "/api/auth/jwt/create/",
             {"username": user_obj.username, "password": password},
@@ -116,7 +116,7 @@ def obtain_jwt_tokens(api_client) -> Callable[[User, str], Dict[str, str]]:
 
 
 @pytest.fixture
-def auth_headers_for_user(obtain_jwt_tokens, user, user_password) -> Dict[str, str]:
+def auth_headers_for_user(obtain_jwt_tokens, user, user_password) -> dict[str, str]:
     tokens = obtain_jwt_tokens(user, user_password)
     return {"HTTP_AUTHORIZATION": f"Bearer {tokens['access']}"}
 
@@ -124,7 +124,7 @@ def auth_headers_for_user(obtain_jwt_tokens, user, user_password) -> Dict[str, s
 @pytest.fixture
 def auth_headers_for_admin(
     obtain_jwt_tokens, admin_user_in_group, user_password
-) -> Dict[str, str]:
+) -> dict[str, str]:
     tokens = obtain_jwt_tokens(admin_user_in_group, user_password)
     return {"HTTP_AUTHORIZATION": f"Bearer {tokens['access']}"}
 
@@ -154,7 +154,7 @@ def item_factory(db, make_test_image_file) -> Callable[..., Item]:
 
 
 @pytest.fixture
-def order_factory(db) -> Callable[..., Tuple[Order, OrderItem]]:
+def order_factory(db) -> Callable[..., tuple[Order, OrderItem]]:
     """
     Create an Order with one OrderItem. Caller can pass:
       - user

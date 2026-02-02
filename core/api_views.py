@@ -31,8 +31,6 @@ Idempotency:
 
 from __future__ import annotations
 
-from typing import Optional
-
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -63,7 +61,7 @@ from core.payment_service import (
 from core.permissions import IsAdminGroupOrDjangoPermission
 
 
-def _get_idempotency_key_from_request(request) -> Optional[str]:
+def _get_idempotency_key_from_request(request) -> str | None:
     """
     Read idempotency key from request header.
 
@@ -194,7 +192,9 @@ class AdminCouponListCreateAPIView(APIView):
         ser = AdminCouponSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         coupon = ser.save()
-        return Response(AdminCouponSerializer(coupon).data, status=status.HTTP_201_CREATED)
+        return Response(
+            AdminCouponSerializer(coupon).data, status=status.HTTP_201_CREATED
+        )
 
 
 class AdminCouponDetailAPIView(APIView):
@@ -299,7 +299,9 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
     """Order status transition audit log."""
 
     performed_by_id = serializers.IntegerField(source="performed_by.id", read_only=True)
-    performed_by_username = serializers.CharField(source="performed_by.username", read_only=True)
+    performed_by_username = serializers.CharField(
+        source="performed_by.username", read_only=True
+    )
 
     class Meta:
         model = OrderStatusHistory
@@ -511,7 +513,9 @@ class MyActiveOrderCheckoutSummaryAPIView(APIView):
             for oi in order.items.all():
                 subtotal += float(oi.get_final_price())
             totals["subtotal"] = float(subtotal)
-            totals["coupon_amount"] = float(order.coupon.amount) if order.coupon else 0.0
+            totals["coupon_amount"] = (
+                float(order.coupon.amount) if order.coupon else 0.0
+            )
         else:
             notes.append("No active order.")
 
@@ -607,7 +611,9 @@ class AdminOrderListAPIView(APIView):
         qs = (
             Order.objects.all()
             .prefetch_related("items__item", "status_history")
-            .select_related("user", "shipping_address", "billing_address", "payment", "coupon")
+            .select_related(
+                "user", "shipping_address", "billing_address", "payment", "coupon"
+            )
             .order_by("-id")
         )
 
@@ -620,7 +626,9 @@ class AdminOrderListAPIView(APIView):
             try:
                 qs = qs.filter(user_id=int(user_id))
             except (TypeError, ValueError):
-                return Response({"detail": "Invalid user_id."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Invalid user_id."}, status=status.HTTP_400_BAD_REQUEST
+                )
 
         ordered_param = request.query_params.get("ordered")
         if ordered_param is not None and ordered_param != "":
@@ -662,7 +670,9 @@ class AdminOrderDetailAPIView(APIView):
         order = (
             Order.objects.filter(pk=order_id)
             .prefetch_related("items__item", "status_history")
-            .select_related("user", "shipping_address", "billing_address", "payment", "coupon")
+            .select_related(
+                "user", "shipping_address", "billing_address", "payment", "coupon"
+            )
             .first()
         )
         if not order:
@@ -782,11 +792,17 @@ class DummyPaymentSimulateAPIView(APIView):
         """Simulate payment for current user's active order (dummy mode only)."""
         if get_payment_mode() != "dummy":
             return Response(
-                {"detail": "Dummy simulation is only available when payment mode is 'dummy'."},
+                {
+                    "detail": "Dummy simulation is only available when payment mode is 'dummy'."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        order = Order.objects.filter(user=request.user, ordered=False).order_by("-id").first()
+        order = (
+            Order.objects.filter(user=request.user, ordered=False)
+            .order_by("-id")
+            .first()
+        )
         if not order:
             return Response(
                 {"detail": "No active order to pay."},

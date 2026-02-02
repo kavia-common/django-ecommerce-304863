@@ -389,7 +389,7 @@ class Order(models.Model):
         reason: str | None = None,
         idempotency_key: str | None = None,
         metadata: dict | None = None,
-    ) -> "OrderStatusHistory":
+    ) -> OrderStatusHistory:
         """
         Transition the order to `target_status` with validation + idempotency and record history.
 

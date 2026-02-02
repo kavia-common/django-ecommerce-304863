@@ -30,7 +30,7 @@ class Command(BaseCommand):
         ]
 
         for f in files_to_rename:
-            with open(f, "r") as file:
+            with open(f) as file:
                 filedata = file.read()
 
             filedata = filedata.replace(current_project_name, new_project_name)

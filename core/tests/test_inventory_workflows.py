@@ -11,12 +11,18 @@ from core.models import InventoryAdjustment
 
 
 @pytest.mark.django_db
-def test_inventory_reserve_commit_restock_idempotency(item_factory, order_factory, user):
+def test_inventory_reserve_commit_restock_idempotency(
+    item_factory, order_factory, user
+):
     item = item_factory(stock_on_hand=10, stock_reserved=0)
-    order, oi = order_factory(user=user, item=item, quantity=3, status="CREATED", ordered=False)
+    order, oi = order_factory(
+        user=user, item=item, quantity=3, status="CREATED", ordered=False
+    )
 
     # Reserve
-    res1 = reserve_inventory_for_order(order=order, performed_by=user, idempotency_key="t1")
+    res1 = reserve_inventory_for_order(
+        order=order, performed_by=user, idempotency_key="t1"
+    )
     assert res1.changed is True
     item.refresh_from_db()
     oi.refresh_from_db()
@@ -25,14 +31,18 @@ def test_inventory_reserve_commit_restock_idempotency(item_factory, order_factor
     assert item.stock_on_hand == 10  # reservation doesn't change on_hand
 
     # Reserve again: idempotent
-    res2 = reserve_inventory_for_order(order=order, performed_by=user, idempotency_key="t1")
+    res2 = reserve_inventory_for_order(
+        order=order, performed_by=user, idempotency_key="t1"
+    )
     assert res2.changed is False
     item.refresh_from_db()
     assert item.stock_reserved == 3
 
     # Commit
     before_adj = InventoryAdjustment.objects.count()
-    com1 = commit_inventory_for_paid_order(order=order, performed_by=user, idempotency_key="t2")
+    com1 = commit_inventory_for_paid_order(
+        order=order, performed_by=user, idempotency_key="t2"
+    )
     assert com1.changed is True
     item.refresh_from_db()
     oi.refresh_from_db()
@@ -42,12 +52,16 @@ def test_inventory_reserve_commit_restock_idempotency(item_factory, order_factor
     assert InventoryAdjustment.objects.count() == before_adj + 1
 
     # Commit again: idempotent (no extra adjustments)
-    com2 = commit_inventory_for_paid_order(order=order, performed_by=user, idempotency_key="t2")
+    com2 = commit_inventory_for_paid_order(
+        order=order, performed_by=user, idempotency_key="t2"
+    )
     assert com2.changed is False
     assert InventoryAdjustment.objects.count() == before_adj + 1
 
     # Restock (refund)
-    rest1 = restock_inventory_for_order_refund(order=order, performed_by=user, idempotency_key="t3")
+    rest1 = restock_inventory_for_order_refund(
+        order=order, performed_by=user, idempotency_key="t3"
+    )
     assert rest1.changed is True
     item.refresh_from_db()
     oi.refresh_from_db()
@@ -55,14 +69,18 @@ def test_inventory_reserve_commit_restock_idempotency(item_factory, order_factor
     assert oi.quantity_restocked == 3
 
     # Restock again: idempotent
-    rest2 = restock_inventory_for_order_refund(order=order, performed_by=user, idempotency_key="t3")
+    rest2 = restock_inventory_for_order_refund(
+        order=order, performed_by=user, idempotency_key="t3"
+    )
     assert rest2.changed is False
 
 
 @pytest.mark.django_db
 def test_inventory_release_reservation_idempotent(item_factory, order_factory, user):
     item = item_factory(stock_on_hand=5, stock_reserved=0)
-    order, oi = order_factory(user=user, item=item, quantity=2, status="CREATED", ordered=False)
+    order, oi = order_factory(
+        user=user, item=item, quantity=2, status="CREATED", ordered=False
+    )
 
     reserve_inventory_for_order(order=order, performed_by=user, idempotency_key="r1")
     item.refresh_from_db()
@@ -86,7 +104,11 @@ def test_inventory_release_reservation_idempotent(item_factory, order_factory, u
 @pytest.mark.django_db
 def test_inventory_reserve_insufficient_stock_raises(item_factory, order_factory, user):
     item = item_factory(stock_on_hand=1, stock_reserved=0)
-    order, _oi = order_factory(user=user, item=item, quantity=2, status="CREATED", ordered=False)
+    order, _oi = order_factory(
+        user=user, item=item, quantity=2, status="CREATED", ordered=False
+    )
 
     with pytest.raises(ValidationError):
-        reserve_inventory_for_order(order=order, performed_by=user, idempotency_key="nope")
+        reserve_inventory_for_order(
+            order=order, performed_by=user, idempotency_key="nope"
+        )

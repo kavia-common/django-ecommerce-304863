@@ -88,7 +88,9 @@ class CheckoutView(View):
                         order.shipping_address = shipping_address
                         order.save()
                     else:
-                        messages.info(self.request, "No default shipping address available")
+                        messages.info(
+                            self.request, "No default shipping address available"
+                        )
                         return redirect("core:checkout")
                 else:
                     print("User is entering a new shipping address")
@@ -97,7 +99,9 @@ class CheckoutView(View):
                     shipping_country = form.cleaned_data.get("shipping_country")
                     shipping_zip = form.cleaned_data.get("shipping_zip")
 
-                    if is_valid_form([shipping_address1, shipping_country, shipping_zip]):
+                    if is_valid_form(
+                        [shipping_address1, shipping_country, shipping_zip]
+                    ):
                         shipping_address = Address(
                             user=self.request.user,
                             street_address=shipping_address1,
@@ -111,7 +115,9 @@ class CheckoutView(View):
                         order.shipping_address = shipping_address
                         order.save()
 
-                        set_default_shipping = form.cleaned_data.get("set_default_shipping")
+                        set_default_shipping = form.cleaned_data.get(
+                            "set_default_shipping"
+                        )
                         if set_default_shipping:
                             shipping_address.default = True
                             shipping_address.save()
@@ -144,7 +150,9 @@ class CheckoutView(View):
                         order.billing_address = billing_address
                         order.save()
                     else:
-                        messages.info(self.request, "No default billing address available")
+                        messages.info(
+                            self.request, "No default billing address available"
+                        )
                         return redirect("core:checkout")
                 else:
                     print("User is entering a new billing address")
@@ -167,7 +175,9 @@ class CheckoutView(View):
                         order.billing_address = billing_address
                         order.save()
 
-                        set_default_billing = form.cleaned_data.get("set_default_billing")
+                        set_default_billing = form.cleaned_data.get(
+                            "set_default_billing"
+                        )
                         if set_default_billing:
                             billing_address.default = True
                             billing_address.save()
@@ -407,7 +417,9 @@ def remove_from_cart(request, slug):
         order = order_qs[0]
         # check if the order item is in the order
         if order.items.filter(item__slug=item.slug).exists():
-            order_item = OrderItem.objects.filter(item=item, user=request.user, ordered=False)[0]
+            order_item = OrderItem.objects.filter(
+                item=item, user=request.user, ordered=False
+            )[0]
             order.items.remove(order_item)
             order_item.delete()
             messages.info(request, "This item was removed from your cart.")
@@ -428,7 +440,9 @@ def remove_single_item_from_cart(request, slug):
         order = order_qs[0]
         # check if the order item is in the order
         if order.items.filter(item__slug=item.slug).exists():
-            order_item = OrderItem.objects.filter(item=item, user=request.user, ordered=False)[0]
+            order_item = OrderItem.objects.filter(
+                item=item, user=request.user, ordered=False
+            )[0]
             if order_item.quantity > 1:
                 order_item.quantity -= 1
                 order_item.save()

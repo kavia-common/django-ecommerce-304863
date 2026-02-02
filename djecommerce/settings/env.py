@@ -12,7 +12,6 @@ additional safety validation where required.
 
 import json
 import os
-from typing import List, Optional
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -33,7 +32,7 @@ def env_bool(name: str, default: bool = False) -> bool:
     return _truthy(raw)
 
 
-def env_str(name: str, default: Optional[str] = None) -> Optional[str]:
+def env_str(name: str, default: str | None = None) -> str | None:
     """Read a string environment variable, returning default if missing/blank."""
     raw = os.environ.get(name, None)
     if raw is None:
@@ -44,7 +43,7 @@ def env_str(name: str, default: Optional[str] = None) -> Optional[str]:
     return raw
 
 
-def env_list(name: str, default: Optional[List[str]] = None) -> List[str]:
+def env_list(name: str, default: list[str] | None = None) -> list[str]:
     """
     Read a list environment variable.
 
@@ -95,7 +94,7 @@ def require_env(name: str, *, hint: str = "") -> str:
     return value
 
 
-def _validate_production_hosts(*, allowed_hosts: List[str]) -> None:
+def _validate_production_hosts(*, allowed_hosts: list[str]) -> None:
     """
     Ensure ALLOWED_HOSTS is explicitly set to something safer than wildcard.
 
@@ -129,8 +128,8 @@ def validate_settings(
     *,
     debug: bool,
     environment: str,
-    allowed_hosts: Optional[List[str]] = None,
-    payment_mode: Optional[str] = None,
+    allowed_hosts: list[str] | None = None,
+    payment_mode: str | None = None,
 ) -> None:
     """
     Validate key settings at import time (fail fast).

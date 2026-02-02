@@ -8,7 +8,7 @@ We implement RBAC using Django's built-in Groups/Permissions system:
 
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.permissions import BasePermission
@@ -73,7 +73,7 @@ class IsAdminGroupOrDjangoPermission(BasePermission):
         if user.is_superuser or _in_group(user, "Admin"):
             return True
 
-        perms: Optional[Iterable[str]] = getattr(view, "required_django_perms", None)
+        perms: Iterable[str] | None = getattr(view, "required_django_perms", None)
         if not perms:
             # If a view forgets to specify perms, default to deny (safer).
             return False

@@ -23,7 +23,6 @@ All write operations lock Item rows with SELECT ... FOR UPDATE to avoid oversell
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -49,7 +48,7 @@ def reserve_inventory_for_order(
     *,
     order: Order,
     performed_by=None,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> InventoryActionResult:
     """
     PUBLIC_INTERFACE
@@ -137,7 +136,7 @@ def release_inventory_reservations_for_order(
     *,
     order: Order,
     performed_by=None,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
     reason: str = "Reservation released",
 ) -> InventoryActionResult:
     """
@@ -192,7 +191,7 @@ def commit_inventory_for_paid_order(
     *,
     order: Order,
     performed_by=None,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> InventoryActionResult:
     """
     PUBLIC_INTERFACE
@@ -277,7 +276,7 @@ def restock_inventory_for_order_refund(
     *,
     order: Order,
     performed_by=None,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> InventoryActionResult:
     """
     PUBLIC_INTERFACE

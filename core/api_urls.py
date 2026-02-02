@@ -47,7 +47,9 @@ urlpatterns = [
     # Product API (public read-only + admin CRUD on same routes)
     path("", include(router.urls)),
     # Legacy public/admin product APIViews (kept for backwards compatibility; do not use for new clients)
-    path("products-legacy/", PublicItemListAPIView.as_view(), name="api-products-legacy"),
+    path(
+        "products-legacy/", PublicItemListAPIView.as_view(), name="api-products-legacy"
+    ),
     path(
         "products-legacy/<int:item_id>/",
         PublicItemDetailAPIView.as_view(),
@@ -60,7 +62,11 @@ urlpatterns = [
         name="api-orders-active",
     ),
     path("orders/", MyOrdersListAPIView.as_view(), name="api-orders"),
-    path("orders/<int:order_id>/", MyOrderDetailAPIView.as_view(), name="api-order-detail"),
+    path(
+        "orders/<int:order_id>/",
+        MyOrderDetailAPIView.as_view(),
+        name="api-order-detail",
+    ),
     path(
         "me/payments/dummy/simulate/",
         DummyPaymentSimulateAPIView.as_view(),
