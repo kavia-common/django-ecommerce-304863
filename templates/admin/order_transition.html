@@ -4,22 +4,38 @@
   <h2>Update Order #{{ order.id }}</h2>
   <p class="text-muted">Admin-only view.</p>
 
+  <div class="card mb-3">
+    <div class="card-body">
+      <div><strong>Current status:</strong> {{ order.get_status_display }}</div>
+      <div class="mt-2">
+        <strong>History</strong>
+        <ul class="mb-0">
+          <li>Placed: {% if order.placed_at %}{{ order.placed_at }}{% else %}-{% endif %}</li>
+          <li>Shipped: {% if order.shipped_at %}{{ order.shipped_at }}{% else %}-{% endif %}</li>
+          <li>Delivered: {% if order.delivered_at %}{{ order.delivered_at }}{% else %}-{% endif %}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <form method="post">
     {% csrf_token %}
 
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" name="being_delivered" id="being_delivered" {% if order.being_delivered %}checked{% endif %}>
-      <label class="form-check-label" for="being_delivered">Being delivered</label>
+    <div class="form-group">
+      <label for="new_status"><strong>Transition status</strong></label>
+      <select class="form-control" id="new_status" name="new_status">
+        <option value="placed" {% if order.status == "placed" %}selected{% endif %}>Placed</option>
+        <option value="shipped" {% if order.status == "shipped" %}selected{% endif %}>Shipped</option>
+        <option value="delivered" {% if order.status == "delivered" %}selected{% endif %}>Delivered</option>
+      </select>
+      <small class="form-text text-muted">Valid transitions: placed → shipped → delivered.</small>
     </div>
 
-    <div class="form-check">
-      <input class="form-check-input" type="checkbox" name="received" id="received" {% if order.received %}checked{% endif %}>
-      <label class="form-check-label" for="received">Received</label>
-    </div>
+    <hr/>
 
     <div class="form-check">
       <input class="form-check-input" type="checkbox" name="refund_granted" id="refund_granted" {% if order.refund_granted %}checked{% endif %}>
-      <label class="form-check-label" for="refund_granted">Refund granted</label>
+      <label class="form-check-label" for="refund_granted">Refund granted (does not change shipping lifecycle)</label>
     </div>
 
     <div class="mt-3">

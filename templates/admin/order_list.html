@@ -10,8 +10,12 @@
         <th>ID</th>
         <th>User</th>
         <th>Ordered</th>
-        <th>Being delivered</th>
-        <th>Received</th>
+        <th>Status</th>
+        <th>Placed at</th>
+        <th>Shipped at</th>
+        <th>Delivered at</th>
+        <th>Legacy: Being delivered</th>
+        <th>Legacy: Received</th>
         <th>Refund requested</th>
         <th>Refund granted</th>
         <th>Actions</th>
@@ -23,6 +27,10 @@
         <td>{{ o.id }}</td>
         <td>{{ o.user }}</td>
         <td>{{ o.ordered }}</td>
+        <td><strong>{{ o.get_status_display }}</strong></td>
+        <td>{% if o.placed_at %}{{ o.placed_at }}{% else %}-{% endif %}</td>
+        <td>{% if o.shipped_at %}{{ o.shipped_at }}{% else %}-{% endif %}</td>
+        <td>{% if o.delivered_at %}{{ o.delivered_at }}{% else %}-{% endif %}</td>
         <td>{{ o.being_delivered }}</td>
         <td>{{ o.received }}</td>
         <td>{{ o.refund_requested }}</td>
@@ -32,7 +40,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="8">No orders found.</td></tr>
+      <tr><td colspan="12">No orders found.</td></tr>
       {% endfor %}
     </tbody>
   </table>

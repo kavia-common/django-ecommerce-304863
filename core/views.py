@@ -341,6 +341,15 @@ class PaymentView(View):
                     order.ordered = True
                     order.payment = payment
                     order.ref_code = create_ref_code()
+
+                    # New lifecycle: mark as placed on successful payment.
+                    # Keep legacy flags synced via Order.save().
+                    try:
+                        order.transition_to(Order.OrderStatus.PLACED, actor=self.request.user)
+                    except Exception:
+                        # Defensive: do not break checkout if an unexpected lifecycle issue occurs.
+                        pass
+
                     order.save()
 
                 messages.success(self.request, "Your order was successful!")
@@ -612,7 +621,8 @@ def admin_order_list(request):
 def admin_order_transition(request, order_id: int):
     """Admin-only: transition an order status via a simple POST.
 
-    Allowed transitions are represented by boolean flags on the Order model.
+    Uses explicit status lifecycle with validation:
+      placed -> shipped -> delivered
     """
     order = get_object_or_404(Order, pk=order_id)
 
@@ -620,25 +630,32 @@ def admin_order_transition(request, order_id: int):
         # Render a small management form
         return render(request, "admin/order_transition.html", {"order": order})
 
-    # Inventory/status transitions are admin-only; keep it simple and robust.
-    being_delivered = request.POST.get("being_delivered")
-    received = request.POST.get("received")
+    new_status = request.POST.get("new_status")
     refund_granted = request.POST.get("refund_granted")
 
-    # Apply only if provided
-    if being_delivered is not None:
-        order.being_delivered = being_delivered.lower() in ("1", "true", "on", "yes")
-    if received is not None:
-        order.received = received.lower() in ("1", "true", "on", "yes")
-    if refund_granted is not None:
-        order.refund_granted = refund_granted.lower() in ("1", "true", "on", "yes")
+    # Refund flag is independent from shipping lifecycle.
+    order.refund_granted = refund_granted is not None
+
+    if new_status:
+        try:
+            order.transition_to(new_status, actor=request.user)
+        except ValueError as e:
+            messages.warning(request, str(e))
+            return redirect("core:admin-order-transition", order_id=order.id)
 
     order.save()
-    messages.success(request, "Order status updated.")
+    messages.success(request, "Order updated.")
     return redirect("core:admin-order-list")
 
 
 # PUBLIC_INTERFACE
+@login_required
+def my_orders(request):
+    """User-facing: show a list of the user's paid orders with lifecycle status."""
+    orders = Order.objects.filter(user=request.user, ordered=True).order_by("-ordered_date")
+    return render(request, "my_orders.html", {"orders": orders})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def api_me(request):

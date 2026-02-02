@@ -40,29 +40,74 @@ class ItemSerializer(serializers.ModelSerializer):
 
 
 class InventoryAdjustRequest(serializers.Serializer):
-    """Request payload for inventory adjustments.
-
-    Note: The current data model does not have stock quantities. We provide a safe
-    placeholder endpoint that can be extended once inventory fields are introduced.
-    """
+    """Request payload for inventory adjustments."""
 
     item_id = serializers.IntegerField(help_text="Item ID to adjust.")
     delta = serializers.IntegerField(help_text="Stock delta (positive or negative).")
 
 
 class OrderStatusTransitionRequest(serializers.Serializer):
-    """Request payload for order status transitions (admin-only).
+    """Request payload for admin order status transitions."""
 
-    The current Order model uses boolean flags:
-    - being_delivered
-    - received
-    - refund_granted
-    - refund_requested
-    """
+    new_status = serializers.ChoiceField(
+        choices=[c.value for c in Order.OrderStatus],
+        help_text="Target order status.",
+    )
 
-    being_delivered = serializers.BooleanField(required=False)
-    received = serializers.BooleanField(required=False)
-    refund_granted = serializers.BooleanField(required=False)
+
+class OrderAdminSerializer(serializers.ModelSerializer):
+    """Serializer for admin order management views."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    history = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "user",
+            "ref_code",
+            "ordered",
+            "ordered_date",
+            "status",
+            "status_display",
+            "placed_at",
+            "shipped_at",
+            "delivered_at",
+            "history",
+            # legacy
+            "being_delivered",
+            "received",
+            "refund_requested",
+            "refund_granted",
+        ]
+
+    def get_history(self, obj):
+        return obj.status_history()
+
+
+class OrderMeSerializer(serializers.ModelSerializer):
+    """Serializer for user-facing order view."""
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    history = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "ref_code",
+            "ordered_date",
+            "status",
+            "status_display",
+            "placed_at",
+            "shipped_at",
+            "delivered_at",
+            "history",
+        ]
+
+    def get_history(self, obj):
+        return obj.status_history()
 
 
 # PUBLIC_INTERFACE
@@ -146,35 +191,84 @@ def api_admin_inventory_adjust(request):
 
 
 # PUBLIC_INTERFACE
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def api_admin_orders(request):
+    """Admin-only: list all orders (for operations)."""
+    qs = Order.objects.all().order_by("-start_date")
+    return Response(OrderAdminSerializer(qs, many=True).data)
+
+
+# PUBLIC_INTERFACE
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def api_admin_order_detail(request, order_id: int):
+    """Admin-only: get an order with current status and history."""
+    order = get_object_or_404(Order, pk=order_id)
+    return Response(OrderAdminSerializer(order).data)
+
+
+# PUBLIC_INTERFACE
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsAdminRole])
 def api_admin_order_transition(request, order_id: int):
     """Admin-only: transition an order status.
 
-    Updates boolean flags on Order safely inside a transaction.
+    Valid transitions:
+      placed -> shipped -> delivered
+
+    Request:
+      {"new_status": "shipped"}
+
+    Response:
+      Updated order (status + timestamps + legacy flags).
     """
     payload = OrderStatusTransitionRequest(data=request.data)
     payload.is_valid(raise_exception=True)
 
-    order = get_object_or_404(Order, pk=order_id)
+    new_status = payload.validated_data["new_status"]
 
     with transaction.atomic():
-        data = payload.validated_data
-        # Apply only provided fields
-        if "being_delivered" in data:
-            order.being_delivered = data["being_delivered"]
-        if "received" in data:
-            order.received = data["received"]
-        if "refund_granted" in data:
-            order.refund_granted = data["refund_granted"]
+        order = get_object_or_404(Order.objects.select_for_update(), pk=order_id)
+        try:
+            order.transition_to(new_status, actor=request.user)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         order.save()
 
+    return Response(OrderAdminSerializer(order).data, status=status.HTTP_200_OK)
+
+
+# PUBLIC_INTERFACE
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_my_orders(request):
+    """User: list the authenticated user's paid orders with status and history."""
+    qs = Order.objects.filter(user=request.user, ordered=True).order_by("-ordered_date")
+    return Response(OrderMeSerializer(qs, many=True).data)
+
+
+# PUBLIC_INTERFACE
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def api_me(request):
+    """Return basic identity information for the authenticated user.
+
+    This endpoint is intentionally minimal and exists to confirm that:
+    - JWT token obtain works (POST /api/auth/token/)
+    - Authorization header processing works (Bearer access token)
+    - DRF + SimpleJWT permissions enforce authentication
+
+    Returns:
+        JSON with user id, username, email, and staff/superuser flags.
+    """
+    user = request.user
     return Response(
         {
-            "id": order.id,
-            "being_delivered": order.being_delivered,
-            "received": order.received,
-            "refund_requested": order.refund_requested,
-            "refund_granted": order.refund_granted,
+            "id": user.id,
+            "username": user.get_username(),
+            "email": user.email,
+            "is_staff": user.is_staff,
+            "is_superuser": user.is_superuser,
         }
     )

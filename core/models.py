@@ -278,6 +278,18 @@ class OrderItem(models.Model):
 
 
 class Order(models.Model):
+    """Customer order.
+
+    NOTE: Historically this project used boolean flags for lifecycle tracking.
+    This implementation introduces an explicit lifecycle with `status` and milestone
+    timestamps while keeping the old boolean fields for backward compatibility.
+    """
+
+    class OrderStatus(models.TextChoices):
+        PLACED = "placed", "Placed"
+        SHIPPED = "shipped", "Shipped"
+        DELIVERED = "delivered", "Delivered"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE)
     ref_code = models.CharField(max_length=20, blank=True, null=True)
@@ -293,10 +305,25 @@ class Order(models.Model):
         'Payment', on_delete=models.SET_NULL, blank=True, null=True)
     coupon = models.ForeignKey(
         'Coupon', on_delete=models.SET_NULL, blank=True, null=True)
+
+    # Legacy lifecycle fields (kept for backward compatibility with templates/data)
     being_delivered = models.BooleanField(default=False)
     received = models.BooleanField(default=False)
+
     refund_requested = models.BooleanField(default=False)
     refund_granted = models.BooleanField(default=False)
+
+    # New explicit lifecycle fields
+    status = models.CharField(
+        max_length=20,
+        choices=OrderStatus.choices,
+        default=OrderStatus.PLACED,
+        db_index=True,
+        help_text="Explicit order lifecycle status.",
+    )
+    placed_at = models.DateTimeField(blank=True, null=True)
+    shipped_at = models.DateTimeField(blank=True, null=True)
+    delivered_at = models.DateTimeField(blank=True, null=True)
 
     '''
     1. Item added to cart
@@ -319,6 +346,122 @@ class Order(models.Model):
         if self.coupon:
             total -= self.coupon.amount
         return total
+
+    # PUBLIC_INTERFACE
+    def status_history(self) -> list[dict]:
+        """Return a stable status history for UI/API display.
+
+        Returns:
+            List of dicts: [{status: <str>, at: <datetime|None>}]
+        """
+        return [
+            {"status": self.OrderStatus.PLACED, "at": self.placed_at},
+            {"status": self.OrderStatus.SHIPPED, "at": self.shipped_at},
+            {"status": self.OrderStatus.DELIVERED, "at": self.delivered_at},
+        ]
+
+    # PUBLIC_INTERFACE
+    def can_transition_to(self, new_status: str) -> bool:
+        """Return whether transitioning to `new_status` is allowed.
+
+        Transition rules (simple linear lifecycle):
+            placed -> shipped -> delivered
+
+        Same-status transition is allowed as a no-op.
+        """
+        allowed_next = {
+            self.OrderStatus.PLACED: {self.OrderStatus.PLACED, self.OrderStatus.SHIPPED},
+            self.OrderStatus.SHIPPED: {self.OrderStatus.SHIPPED, self.OrderStatus.DELIVERED},
+            self.OrderStatus.DELIVERED: {self.OrderStatus.DELIVERED},
+        }
+        return new_status in allowed_next.get(self.status, set())
+
+    # PUBLIC_INTERFACE
+    def transition_to(self, new_status: str, *, actor=None, at: timezone.datetime | None = None) -> None:
+        """Transition the order to a new status with validation and milestone timestamps.
+
+        Args:
+            new_status: One of OrderStatus values.
+            actor: Optional user performing the transition (for future auditability).
+            at: Timestamp to use; defaults to timezone.now().
+
+        Raises:
+            ValueError: if new_status is invalid or transition is not allowed.
+        """
+        if new_status not in {c.value for c in self.OrderStatus}:
+            raise ValueError("Invalid order status.")
+        if not self.can_transition_to(new_status):
+            raise ValueError(f"Invalid transition from '{self.status}' to '{new_status}'.")
+
+        now = at or timezone.now()
+
+        # Ensure placed_at exists once the order is actually paid/ordered.
+        if self.ordered and self.placed_at is None:
+            self.placed_at = self.ordered_date or now
+
+        # Apply transition and set milestone timestamp once.
+        self.status = new_status
+        if new_status == self.OrderStatus.PLACED and self.placed_at is None:
+            self.placed_at = self.ordered_date or now
+        if new_status == self.OrderStatus.SHIPPED:
+            if self.shipped_at is None:
+                self.shipped_at = now
+            # Back-compat mapping
+            self.being_delivered = True
+            self.received = False
+        if new_status == self.OrderStatus.DELIVERED:
+            if self.delivered_at is None:
+                self.delivered_at = now
+            # Back-compat mapping
+            self.being_delivered = True
+            self.received = True
+
+    # PUBLIC_INTERFACE
+    def sync_status_from_legacy_flags(self) -> None:
+        """Derive `status` fields from legacy boolean flags.
+
+        This is used for backward-compatible migration and for defensive sync in
+        environments where legacy flags may still be modified.
+        """
+        # Determine desired status
+        if self.received:
+            desired = self.OrderStatus.DELIVERED
+        elif self.being_delivered:
+            desired = self.OrderStatus.SHIPPED
+        else:
+            desired = self.OrderStatus.PLACED
+
+        # Only apply if transition is valid (always should be, given linear mapping).
+        if self.can_transition_to(desired):
+            self.transition_to(desired)
+
+    # PUBLIC_INTERFACE
+    def sync_legacy_flags_from_status(self) -> None:
+        """Set legacy flags based on current explicit `status`."""
+        if self.status == self.OrderStatus.PLACED:
+            self.being_delivered = False
+            self.received = False
+        elif self.status == self.OrderStatus.SHIPPED:
+            self.being_delivered = True
+            self.received = False
+        elif self.status == self.OrderStatus.DELIVERED:
+            self.being_delivered = True
+            self.received = True
+
+    def save(self, *args, **kwargs):
+        """Ensure status and timestamps remain consistent with legacy flags."""
+        # If this is a paid order and placed_at wasn't set yet, set it.
+        if self.ordered and self.placed_at is None:
+            self.placed_at = self.ordered_date or timezone.now()
+
+        # Keep the new status consistent with legacy flags, preferring explicit status
+        # when present; but allow legacy booleans to drive status if status is missing.
+        if self.status:
+            self.sync_legacy_flags_from_status()
+        else:  # pragma: no cover (status has default; defensive)
+            self.sync_status_from_legacy_flags()
+
+        super().save(*args, **kwargs)
 
 
 class Address(models.Model):
