@@ -230,6 +230,14 @@ def api_admin_order_transition(request, order_id: int):
 
     with transaction.atomic():
         order = get_object_or_404(Order.objects.select_for_update(), pk=order_id)
+
+        # Defense in depth: do not allow shipping/delivery transitions on unpaid carts.
+        if (not order.ordered) and new_status in {Order.OrderStatus.SHIPPED, Order.OrderStatus.DELIVERED}:
+            return Response(
+                {"detail": "Cannot ship/deliver an unpaid order (cart)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             order.transition_to(new_status, actor=request.user)
         except ValueError as e:

@@ -636,6 +636,11 @@ def admin_order_transition(request, order_id: int):
     # Refund flag is independent from shipping lifecycle.
     order.refund_granted = refund_granted is not None
 
+    # Prevent lifecycle transitions on unpaid carts.
+    if new_status in {Order.OrderStatus.SHIPPED, Order.OrderStatus.DELIVERED} and not order.ordered:
+        messages.warning(request, "Cannot ship/deliver an unpaid order (cart).")
+        return redirect("core:admin-order-transition", order_id=order.id)
+
     if new_status:
         try:
             order.transition_to(new_status, actor=request.user)

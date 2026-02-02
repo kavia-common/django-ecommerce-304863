@@ -6,34 +6,37 @@
     <h2>My Orders</h2>
     <p class="text-muted">Your paid orders and their delivery status.</p>
 
-    <div class="table-responsive text-nowrap">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Ref</th>
-            <th>Placed</th>
-            <th>Status</th>
-            <th>Shipped</th>
-            <th>Delivered</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for o in orders %}
-          <tr>
-            <td>{{ o.id }}</td>
-            <td>{% if o.ref_code %}{{ o.ref_code }}{% else %}-{% endif %}</td>
-            <td>{% if o.placed_at %}{{ o.placed_at }}{% else %}-{% endif %}</td>
-            <td><strong>{{ o.get_status_display }}</strong></td>
-            <td>{% if o.shipped_at %}{{ o.shipped_at }}{% else %}-{% endif %}</td>
-            <td>{% if o.delivered_at %}{{ o.delivered_at }}{% else %}-{% endif %}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6">No paid orders yet.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% for o in orders %}
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center">
+            <div>
+              <h5 class="mb-1">Order #{{ o.id }}</h5>
+              <div class="text-muted small">
+                Ref: {% if o.ref_code %}{{ o.ref_code }}{% else %}-{% endif %}
+                • Ordered: {{ o.ordered_date }}
+              </div>
+            </div>
+            <div class="mt-2 mt-md-0">
+              <span class="badge badge-primary p-2">{{ o.get_status_display }}</span>
+            </div>
+          </div>
+
+          <hr/>
+
+          <div>
+            <strong>Delivery history</strong>
+            <ul class="mb-0">
+              <li>Placed: {% if o.placed_at %}{{ o.placed_at }}{% else %}-{% endif %}</li>
+              <li>Shipped: {% if o.shipped_at %}{{ o.shipped_at }}{% else %}-{% endif %}</li>
+              <li>Delivered: {% if o.delivered_at %}{{ o.delivered_at }}{% else %}-{% endif %}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="alert alert-info mt-3">No paid orders yet.</div>
+    {% endfor %}
   </div>
 </main>
 {% endblock content %}

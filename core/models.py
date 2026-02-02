@@ -368,12 +368,20 @@ class Order(models.Model):
             placed -> shipped -> delivered
 
         Same-status transition is allowed as a no-op.
+
+        Important:
+            We do not allow transitioning *unpaid carts* beyond PLACED. This prevents
+            admins or buggy callers from shipping/delivering an order that was never paid.
         """
         allowed_next = {
             self.OrderStatus.PLACED: {self.OrderStatus.PLACED, self.OrderStatus.SHIPPED},
             self.OrderStatus.SHIPPED: {self.OrderStatus.SHIPPED, self.OrderStatus.DELIVERED},
             self.OrderStatus.DELIVERED: {self.OrderStatus.DELIVERED},
         }
+
+        if not self.ordered and new_status in {self.OrderStatus.SHIPPED, self.OrderStatus.DELIVERED}:
+            return False
+
         return new_status in allowed_next.get(self.status, set())
 
     # PUBLIC_INTERFACE
@@ -395,20 +403,21 @@ class Order(models.Model):
 
         now = at or timezone.now()
 
-        # Ensure placed_at exists once the order is actually paid/ordered.
+        # Apply transition and set milestone timestamp once.
+        self.status = new_status
+
+        # Only a paid order should get placed_at. Carts (ordered=False) may also have
+        # status=placed, but they are not "placed orders" until payment succeeds.
         if self.ordered and self.placed_at is None:
             self.placed_at = self.ordered_date or now
 
-        # Apply transition and set milestone timestamp once.
-        self.status = new_status
-        if new_status == self.OrderStatus.PLACED and self.placed_at is None:
-            self.placed_at = self.ordered_date or now
         if new_status == self.OrderStatus.SHIPPED:
             if self.shipped_at is None:
                 self.shipped_at = now
             # Back-compat mapping
             self.being_delivered = True
             self.received = False
+
         if new_status == self.OrderStatus.DELIVERED:
             if self.delivered_at is None:
                 self.delivered_at = now
@@ -431,7 +440,7 @@ class Order(models.Model):
         else:
             desired = self.OrderStatus.PLACED
 
-        # Only apply if transition is valid (always should be, given linear mapping).
+        # Only apply if transition is valid.
         if self.can_transition_to(desired):
             self.transition_to(desired)
 
@@ -451,11 +460,11 @@ class Order(models.Model):
     def save(self, *args, **kwargs):
         """Ensure status and timestamps remain consistent with legacy flags."""
         # If this is a paid order and placed_at wasn't set yet, set it.
+        # (We intentionally do NOT set placed_at for carts.)
         if self.ordered and self.placed_at is None:
             self.placed_at = self.ordered_date or timezone.now()
 
-        # Keep the new status consistent with legacy flags, preferring explicit status
-        # when present; but allow legacy booleans to drive status if status is missing.
+        # Keep legacy flags consistent with explicit status.
         if self.status:
             self.sync_legacy_flags_from_status()
         else:  # pragma: no cover (status has default; defensive)
