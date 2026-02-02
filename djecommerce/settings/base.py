@@ -1,4 +1,6 @@
 import os
+from datetime import timedelta
+
 from decouple import config
 
 BASE_DIR = os.path.dirname(os.path.dirname(
@@ -20,6 +22,9 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'crispy_forms',
     'django_countries',
+
+    # API layer (JWT is used only for API endpoints; template views keep allauth+session auth)
+    'rest_framework',
 
     'core'
 ]
@@ -76,6 +81,45 @@ AUTHENTICATION_BACKENDS = (
 )
 SITE_ID = 1
 LOGIN_REDIRECT_URL = '/'
+
+# DRF / JWT (API auth) ----------------------------------------------------------
+#
+# IMPORTANT:
+# - Template-rendered views continue to use Django sessions + allauth unchanged.
+# - API endpoints authenticate via "Authorization: Bearer <access_token>".
+#
+# Env vars required:
+# - JWT_SIGNING_KEY: secret used to sign JWTs (separate from Django SECRET_KEY to allow rotation)
+#
+# If JWT_SIGNING_KEY is not provided, we fall back to SECRET_KEY for backwards compatibility
+# in local/dev, but production SHOULD set JWT_SIGNING_KEY.
+JWT_SIGNING_KEY = config('JWT_SIGNING_KEY', default=SECRET_KEY)
+
+REST_FRAMEWORK = {
+    # Keep API auth separate from template auth; session auth remains for browser views.
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+SIMPLE_JWT = {
+    # Use a dedicated signing key so it can be rotated independently from Django's SECRET_KEY.
+    'SIGNING_KEY': JWT_SIGNING_KEY,
+    'ALGORITHM': 'HS256',
+
+    # Reasonable defaults; can be adjusted later via settings/env-driven strategy.
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+
+    # Reduce token replay risk when refresh is used.
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,  # blacklist app not installed; keep False unless added later
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 
 # CRISPY FORMS
 
