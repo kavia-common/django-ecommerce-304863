@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'crispy_forms',
+    'crispy_bootstrap4',
     'django_countries',
 
     # API layer (JWT is used only for API endpoints; template views keep allauth+session auth)

@@ -1,24 +1,52 @@
-autopep8==1.4.4
-certifi==2019.3.9
-chardet==3.0.4
-defusedxml==0.6.0
-Django==2.2.14
-django-allauth==0.39.1
-django-countries==5.3.3
-django-crispy-forms==1.7.2
-django-debug-toolbar==1.10.1
-idna==2.8
-oauthlib==3.0.1
-pep8==1.7.1
-Pillow==6.2.2
-pycodestyle==2.5.0
-python-decouple==3.1
-python3-openid==3.1.0
-pytz==2018.5
-requests==2.21.0
-requests-oauthlib==1.2.0
-sqlparse==0.2.4
-stripe==2.27.0
-urllib3==1.24.2
-djangorestframework==3.11.2
-djangorestframework-simplejwt==4.8.0
+# Python 3.12 compatible requirements (pinned).
+#
+# Chosen Django version: 4.2.27 (LTS)
+# Rationale: Django 4.2 is the long-term support branch and tends to require fewer
+# breaking changes than Django 5.x/6.x while still supporting Python 3.12.
+#
+# NOTE: Legacy django-allauth/django-countries versions used django.utils.six
+# (or six-style importers) and are not compatible with modern Python/Django.
+# These pins intentionally move to versions that no longer rely on django.utils.six.
+
+# Core framework
+Django==4.2.27
+
+# API stack
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.4.0
+
+# Auth
+django-allauth==0.63.6
+
+# Forms / UI
+django-crispy-forms==2.1
+crispy-bootstrap4==2024.10
+
+# Countries
+django-countries==7.6.1
+
+# Dev tools
+django-debug-toolbar==4.4.6
+
+# Config
+python-decouple==3.8
+
+# Stripe
+stripe==10.12.0
+
+# Imaging
+Pillow==10.4.0
+
+# HTTP/OAuth helpers (allauth dependencies / common)
+requests==2.32.3
+requests-oauthlib==2.0.0
+oauthlib==3.3.1
+python3-openid==3.2.0
+defusedxml==0.7.1
+
+# Django/runtime utilities
+sqlparse==0.5.1
+
+# Formatting (kept, but modernized to avoid old pep8 tooling issues on new Python)
+autopep8==2.0.4
+pycodestyle==2.11.1
