@@ -9,6 +9,12 @@ from rest_framework_simplejwt.views import (
 )
 
 from core.views import api_me
+from core.api_views import (
+    api_admin_items,
+    api_admin_item_detail,
+    api_admin_inventory_adjust,
+    api_admin_order_transition,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -23,6 +29,12 @@ urlpatterns = [
 
     # Minimal JWT-protected example endpoint (verifies DRF+SimpleJWT wiring)
     path('api/auth/me/', api_me, name='api_me'),
+
+    # Admin-only API surface (RBAC enforced by DRF permission classes)
+    path('api/admin/items/', api_admin_items, name='api_admin_items'),
+    path('api/admin/items/<int:item_id>/', api_admin_item_detail, name='api_admin_item_detail'),
+    path('api/admin/inventory/adjust/', api_admin_inventory_adjust, name='api_admin_inventory_adjust'),
+    path('api/admin/orders/<int:order_id>/transition/', api_admin_order_transition, name='api_admin_order_transition'),
 
     path('', include('core.urls', namespace='core'))
 ]

@@ -4,7 +4,7 @@ import string
 import stripe
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import redirect
@@ -18,6 +18,7 @@ from rest_framework.response import Response
 
 from .forms import CheckoutForm, CouponForm, RefundForm, PaymentForm
 from .models import Item, OrderItem, Order, Address, Payment, Coupon, Refund, UserProfile
+from .rbac import request_is_admin
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -521,6 +522,52 @@ class RequestRefundView(View):
             except ObjectDoesNotExist:
                 messages.info(self.request, "This order does not exist.")
                 return redirect("core:request-refund")
+
+
+# --- Admin-only template views -------------------------------------------------
+# We do NOT alter public storefront/cart/checkout views. These views are opt-in
+# endpoints intended for staff/admin operations if used in templates later.
+
+# PUBLIC_INTERFACE
+@user_passes_test(request_is_admin)
+def admin_order_list(request):
+    """Admin-only: list all orders for operations.
+
+    This does not change customer flows; it is a separate management view.
+    """
+    orders = Order.objects.all().order_by("-start_date")
+    return render(request, "admin/order_list.html", {"orders": orders})
+
+
+# PUBLIC_INTERFACE
+@user_passes_test(request_is_admin)
+def admin_order_transition(request, order_id: int):
+    """Admin-only: transition an order status via a simple POST.
+
+    Allowed transitions are represented by boolean flags on the Order model.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    if request.method != "POST":
+        # Render a small management form
+        return render(request, "admin/order_transition.html", {"order": order})
+
+    # Inventory/status transitions are admin-only; keep it simple and robust.
+    being_delivered = request.POST.get("being_delivered")
+    received = request.POST.get("received")
+    refund_granted = request.POST.get("refund_granted")
+
+    # Apply only if provided
+    if being_delivered is not None:
+        order.being_delivered = being_delivered.lower() in ("1", "true", "on", "yes")
+    if received is not None:
+        order.received = received.lower() in ("1", "true", "on", "yes")
+    if refund_granted is not None:
+        order.refund_granted = refund_granted.lower() in ("1", "true", "on", "yes")
+
+    order.save()
+    messages.success(request, "Order status updated.")
+    return redirect("core:admin-order-list")
 
 
 # PUBLIC_INTERFACE

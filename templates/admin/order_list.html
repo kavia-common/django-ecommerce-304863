@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Order Management</h2>
+  <p class="text-muted">Admin-only view.</p>
+
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>User</th>
+        <th>Ordered</th>
+        <th>Being delivered</th>
+        <th>Received</th>
+        <th>Refund requested</th>
+        <th>Refund granted</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.id }}</td>
+        <td>{{ o.user }}</td>
+        <td>{{ o.ordered }}</td>
+        <td>{{ o.being_delivered }}</td>
+        <td>{{ o.received }}</td>
+        <td>{{ o.refund_requested }}</td>
+        <td>{{ o.refund_granted }}</td>
+        <td>
+          <a class="btn btn-sm btn-primary" href="{% url 'core:admin-order-transition' o.id %}">Update</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8">No orders found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -9,7 +9,9 @@ from .views import (
     remove_single_item_from_cart,
     PaymentView,
     AddCouponView,
-    RequestRefundView
+    RequestRefundView,
+    admin_order_list,
+    admin_order_transition,
 )
 
 app_name = 'core'
@@ -25,5 +27,9 @@ urlpatterns = [
     path('remove-item-from-cart/<slug>/', remove_single_item_from_cart,
          name='remove-single-item-from-cart'),
     path('payment/<payment_option>/', PaymentView.as_view(), name='payment'),
-    path('request-refund/', RequestRefundView.as_view(), name='request-refund')
+    path('request-refund/', RequestRefundView.as_view(), name='request-refund'),
+
+    # Admin-only management endpoints for template flows (separate from public storefront).
+    path('manage/orders/', admin_order_list, name='admin-order-list'),
+    path('manage/orders/<int:order_id>/transition/', admin_order_transition, name='admin-order-transition'),
 ]
