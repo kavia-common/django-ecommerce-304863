@@ -15,6 +15,13 @@ from core.api_views import (
     api_admin_inventory_adjust,
     api_admin_order_transition,
 )
+from core.api_admin_products import (
+    api_admin_product_categories,
+    api_admin_product_category_detail,
+    api_admin_product_items,
+    api_admin_product_item_detail,
+    api_admin_product_item_deactivate,
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,10 +38,18 @@ urlpatterns = [
     path('api/auth/me/', api_me, name='api_me'),
 
     # Admin-only API surface (RBAC enforced by DRF permission classes)
+    # Legacy admin endpoints (kept for compatibility)
     path('api/admin/items/', api_admin_items, name='api_admin_items'),
     path('api/admin/items/<int:item_id>/', api_admin_item_detail, name='api_admin_item_detail'),
     path('api/admin/inventory/adjust/', api_admin_inventory_adjust, name='api_admin_inventory_adjust'),
     path('api/admin/orders/<int:order_id>/transition/', api_admin_order_transition, name='api_admin_order_transition'),
+
+    # New product management endpoints (preferred)
+    path('api/admin/products/categories/', api_admin_product_categories, name='api_admin_product_categories'),
+    path('api/admin/products/categories/<int:category_id>/', api_admin_product_category_detail, name='api_admin_product_category_detail'),
+    path('api/admin/products/items/', api_admin_product_items, name='api_admin_product_items'),
+    path('api/admin/products/items/<int:item_id>/', api_admin_product_item_detail, name='api_admin_product_item_detail'),
+    path('api/admin/products/items/<int:item_id>/deactivate/', api_admin_product_item_deactivate, name='api_admin_product_item_deactivate'),
 
     path('', include('core.urls', namespace='core'))
 ]

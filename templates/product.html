@@ -10,9 +10,11 @@
 
         <!--Grid column-->
         <div class="col-md-6 mb-4">
-
-          <img src="https://mdbootstrap.com/img/Photos/Horizontal/E-commerce/Products/14.jpg" class="img-fluid" alt="">
-
+          {% if object.primary_image %}
+            <img src="{{ object.primary_image.url }}" class="img-fluid" alt="{{ object.title }}">
+          {% else %}
+            <img src="{{ object.image.url }}" class="img-fluid" alt="{{ object.title }}">
+          {% endif %}
         </div>
         <!--Grid column-->
 
@@ -24,7 +26,13 @@
 
             <div class="mb-3">
               <a href="">
-                <span class="badge purple mr-1">{{ object.get_category_display }}</span>
+                <span class="badge purple mr-1">
+                  {% if object.category_obj %}
+                    {{ object.category_obj.name }}
+                  {% else %}
+                    {{ object.get_category_display }}
+                  {% endif %}
+                </span>
               </a>
             </div>
 

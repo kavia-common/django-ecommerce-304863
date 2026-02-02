@@ -373,6 +373,11 @@ class ItemDetailView(DetailView):
     model = Item
     template_name = "product.html"
 
+    def get_queryset(self):
+        # Only allow active items to be viewed on the public storefront.
+        # Inactive items remain accessible to admins via admin/API using Item.all_objects.
+        return Item.objects.all()
+
 
 @login_required
 def add_to_cart(request, slug):

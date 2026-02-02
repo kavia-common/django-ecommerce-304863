@@ -3,6 +3,8 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Sum
 from django.shortcuts import reverse
+from django.utils import timezone
+from django.core.validators import MinValueValidator
 from django_countries.fields import CountryField
 
 
@@ -34,15 +36,113 @@ class UserProfile(models.Model):
         return self.user.username
 
 
+class CategoryQuerySet(models.QuerySet):
+    """QuerySet for Category with convenience filters."""
+
+    def active(self):
+        """Return only active categories."""
+        return self.filter(active=True)
+
+
+class Category(models.Model):
+    """Product category suitable for merchandising and filtering."""
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(unique=True)
+    active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = CategoryQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name_plural = "Categories"
+
+    def __str__(self):
+        return self.name
+
+
+class ItemQuerySet(models.QuerySet):
+    """QuerySet for Item with storefront-safe defaults."""
+
+    def active(self):
+        """Return only active items."""
+        return self.filter(active=True)
+
+
+class ActiveItemManager(models.Manager):
+    """Manager that returns only active items.
+
+    Used by default for storefront queries to ensure inactive products are hidden.
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(active=True)
+
+
 class Item(models.Model):
+    # Keep existing fields to avoid breaking templates/checkout/cart flows.
     title = models.CharField(max_length=100)
-    price = models.FloatField()
-    discount_price = models.FloatField(blank=True, null=True)
+
+    price = models.FloatField(validators=[MinValueValidator(0.0)])
+    discount_price = models.FloatField(blank=True, null=True, validators=[MinValueValidator(0.0)])
+
+    # Legacy category choice (kept for backward compatibility with templates and existing data)
     category = models.CharField(choices=CATEGORY_CHOICES, max_length=2)
+
+    # New category relation (production-ready)
+    category_obj = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="items",
+        help_text="Optional structured category relation (preferred).",
+    )
+
     label = models.CharField(choices=LABEL_CHOICES, max_length=1)
     slug = models.SlugField()
+
+    # New merchandising/product management fields
+    sku = models.CharField(
+        max_length=64,
+        unique=True,
+        blank=True,
+        help_text="Stock Keeping Unit (unique). Leave blank to auto-generate during migration.",
+    )
+    active = models.BooleanField(default=True)
+
     description = models.TextField()
+
+    # Legacy image field (kept) + new primary_image field (preferred).
     image = models.ImageField()
+    primary_image = models.ImageField(blank=True, null=True)
+
+    # Simple optional gallery as JSON list of image paths/URLs.
+    # Using JSONField avoids adding new tables while allowing future enhancements.
+    try:
+        from django.db.models import JSONField  # Django 3.1+
+        gallery = JSONField(blank=True, null=True, default=list)
+    except Exception:  # pragma: no cover
+        # Fallback for older Django; project appears modern enough but keep safe.
+        gallery = models.TextField(blank=True, null=True, help_text="JSON-encoded list of images.")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Storefront should default to active items only.
+    objects = ActiveItemManager()
+    # Admin/ops queries can use all_objects to include inactive items.
+    all_objects = ItemQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-created_at", "id"]
+        indexes = [
+            models.Index(fields=["active", "created_at"]),
+            models.Index(fields=["sku"]),
+            models.Index(fields=["slug"]),
+        ]
 
     def __str__(self):
         return self.title
@@ -61,6 +161,12 @@ class Item(models.Model):
         return reverse("core:remove-from-cart", kwargs={
             'slug': self.slug
         })
+
+    def get_storefront_image(self):
+        """Return best-available image for storefront display (template-safe)."""
+        if self.primary_image:
+            return self.primary_image
+        return self.image
 
 
 class OrderItem(models.Model):

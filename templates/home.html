@@ -62,7 +62,11 @@
 
               <div class="view overlay">
                 {% comment %} <img src="https://mdbootstrap.com/img/Photos/Horizontal/E-commerce/Vertical/12.jpg" class="card-img-top" {% endcomment %}
-                <img src="{{ item.image.url }}" class="card-img-top">
+                {% if item.primary_image %}
+                  <img src="{{ item.primary_image.url }}" class="card-img-top">
+                {% else %}
+                  <img src="{{ item.image.url }}" class="card-img-top">
+                {% endif %}
                 <a href="{{ item.get_absolute_url }}">
                   <div class="mask rgba-white-slight"></div>
                 </a>
@@ -70,7 +74,13 @@
 
               <div class="card-body text-center">
                 <a href="" class="grey-text">
-                  <h5>{{ item.get_category_display }}</h5>
+                  <h5>
+                    {% if item.category_obj %}
+                      {{ item.category_obj.name }}
+                    {% else %}
+                      {{ item.get_category_display }}
+                    {% endif %}
+                  </h5>
                 </a>
                 <h5>
                   <strong>
