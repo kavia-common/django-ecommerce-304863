@@ -28,6 +28,9 @@ django-countries==7.6.1
 # Dev tools
 django-debug-toolbar==4.4.6
 
+# Security headers / CSP
+django-csp==3.8
+
 # Config
 python-decouple==3.8
 

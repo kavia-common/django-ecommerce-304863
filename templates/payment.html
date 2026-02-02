@@ -174,7 +174,7 @@ button:hover {
 {% block extra_scripts %}
 
 <script src="https://js.stripe.com/v3/"></script>
-<script nonce="">  // Create a Stripe client.
+<script>  // Create a Stripe client.
   var stripe = Stripe('{{STRIPE_PUBLIC_KEY}}');
 
   // Create an instance of Elements.

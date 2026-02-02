@@ -119,6 +119,77 @@ Settings are split across:
 - `djecommerce/settings/production.py`: production defaults (PostgreSQL, password validators, Stripe live keys).
 - `djecommerce/settings/test.py`: test-only overrides with dummy secrets suitable for CI.
 
+## Security hardening (CSP, SECURE_* flags, DRF throttling)
+
+This project includes baseline security hardening in `djecommerce/settings/base.py`, with environment-driven toggles so development/test remain convenient.
+
+### Content Security Policy (CSP)
+
+Implemented using `django-csp` middleware (`csp.middleware.CSPMiddleware`).
+
+Baseline CSP (enforced when `DJANGO_CSP_REPORT_ONLY=false`):
+
+- `default-src 'self'`
+- `script-src 'self' 'unsafe-inline' https://js.stripe.com`
+- `frame-src https://js.stripe.com`
+- `connect-src 'self' https://api.stripe.com`
+- `img-src 'self' data:`
+- `style-src 'self' 'unsafe-inline'`
+
+This keeps the Stripe PaymentIntent page working (`templates/payment.html` loads `https://js.stripe.com/v3/` and uses inline JS).
+
+#### CSP environment variables
+
+- `DJANGO_CSP_REPORT_ONLY` (bool)
+  - Default: `True` in development (report-only), `False` in production (enforcing).
+- Extend allowlists (comma-separated):
+  - `DJANGO_CSP_ADDITIONAL_SCRIPT_SRC`
+  - `DJANGO_CSP_ADDITIONAL_STYLE_SRC`
+  - `DJANGO_CSP_ADDITIONAL_CONNECT_SRC`
+  - `DJANGO_CSP_ADDITIONAL_IMG_SRC`
+  - `DJANGO_CSP_ADDITIONAL_FRAME_SRC`
+
+If you add new third-party services (analytics, chat widgets, etc.), prefer adding them to the appropriate `DJANGO_CSP_ADDITIONAL_*` env var rather than loosening `default-src`.
+
+### SECURE_* and cookie/session flags
+
+Defaults are production-grade but environment-togglable:
+
+- `DJANGO_SECURE_SSL_REDIRECT` (bool): enables `SECURE_SSL_REDIRECT`
+- `DJANGO_SECURE_HSTS_SECONDS` (int): enables HSTS (`31536000` recommended in production)
+- `DJANGO_SECURE_PROXY_SSL_HEADER` (string): for deployments behind a proxy/TLS terminator
+  - Format: `HTTP_X_FORWARDED_PROTO,https`
+- `DJANGO_ALLOWED_HOSTS` (comma-separated): populates `ALLOWED_HOSTS`
+- `DJANGO_CSRF_TRUSTED_ORIGINS` (comma-separated): populates `CSRF_TRUSTED_ORIGINS`
+- `DJANGO_SESSION_COOKIE_SECURE` / `DJANGO_CSRF_COOKIE_SECURE` (bool): secure cookies
+- SameSite defaults:
+  - `SESSION_COOKIE_SAMESITE='Lax'`
+  - `CSRF_COOKIE_SAMESITE='Lax'`
+- HttpOnly defaults:
+  - `SESSION_COOKIE_HTTPONLY=True`
+  - `CSRF_COOKIE_HTTPONLY=False` (Django constraint)
+
+### DRF throttling defaults
+
+DRF throttling is enabled by default:
+
+- Anon: `60/min` (env: `DRF_THROTTLE_ANON`)
+- Authenticated user: `600/min` (env: `DRF_THROTTLE_USER`)
+
+These limits apply to DRF API endpoints and help reduce abuse/brute-force attempts.
+
+### Logging hygiene
+
+Base logging configuration adds explicit security loggers:
+
+- `django.security`
+- `django.security.SuspiciousOperation`
+
+You can adjust log levels via:
+
+- `DJANGO_LOG_LEVEL` (default: `INFO`)
+- `DJANGO_SECURITY_LOG_LEVEL` (default: `WARNING`)
+
 ## Environment variables (configuration reference)
 
 This project reads environment variables using `python-decouple` (`decouple.config`). The authoritative reads are in:

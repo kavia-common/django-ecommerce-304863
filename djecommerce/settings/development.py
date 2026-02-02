@@ -1,7 +1,16 @@
 from .base import *
 
 DEBUG = True
-ALLOWED_HOSTS = ['127.0.0.1']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+
+# In local dev, keep CSP in report-only mode by default to avoid blocking inline scripts/styles.
+# You can override via DJANGO_CSP_REPORT_ONLY=false in your environment.
+CSP_REPORT_ONLY = config('DJANGO_CSP_REPORT_ONLY', cast=bool, default=True)
+
+# Dev runs on HTTP; keep secure redirect/cookies off unless explicitly enabled via env.
+SECURE_SSL_REDIRECT = config('DJANGO_SECURE_SSL_REDIRECT', cast=bool, default=False)
+SESSION_COOKIE_SECURE = config('DJANGO_SESSION_COOKIE_SECURE', cast=bool, default=False)
+CSRF_COOKIE_SECURE = config('DJANGO_CSRF_COOKIE_SECURE', cast=bool, default=False)
 
 INSTALLED_APPS += [
     'debug_toolbar'

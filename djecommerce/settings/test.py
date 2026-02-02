@@ -15,6 +15,14 @@ from .base import *  # noqa: F403,F401
 DEBUG = False
 ALLOWED_HOSTS = ["testserver", "localhost", "127.0.0.1"]
 
+# Keep CSP non-blocking during tests.
+CSP_REPORT_ONLY = True
+
+# Tests run over HTTP; don't force redirects/secure cookies.
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+
 # Use a deterministic but non-production secret to satisfy settings import.
 # (Django requires a SECRET_KEY; tests should never use real secrets.)
 SECRET_KEY = "dummy-secret-key-for-tests-only"  # noqa: S105
