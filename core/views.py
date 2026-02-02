@@ -1,3 +1,4 @@
+import json
 import random
 import string
 
@@ -8,9 +9,11 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import ListView, DetailView, View
 
 from rest_framework.decorators import api_view, permission_classes
@@ -22,6 +25,42 @@ from .models import Item, OrderItem, Order, Address, Payment, Coupon, Refund, Us
 from .rbac import request_is_admin
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+def _stripe_webhook_secret() -> str:
+    """Return Stripe webhook secret if configured; empty string otherwise."""
+    return getattr(settings, "STRIPE_WEBHOOK_SECRET", "") or ""
+
+
+def _finalize_order_after_successful_payment(*, order: Order, user, payment: Payment) -> None:
+    """Finalize an order after Stripe confirms payment.
+
+    This is shared between synchronous (client-confirmed PaymentIntent) and webhook flow.
+    """
+    # Only after Stripe confirms payment do we reserve/decrement stock.
+    # Use a DB transaction + row locking to prevent oversell.
+    with transaction.atomic():
+        Item.atomic_decrement_stock_for_order(order)
+
+        # assign the payment to the order
+        order_items = order.items.all()
+        order_items.update(ordered=True)
+        for item in order_items:
+            item.save()
+
+        order.ordered = True
+        order.payment = payment
+        order.ref_code = create_ref_code()
+
+        # New lifecycle: mark as placed on successful payment.
+        # Keep legacy flags synced via Order.save().
+        try:
+            order.transition_to(Order.OrderStatus.PLACED, actor=user)
+        except Exception:
+            # Defensive: do not break checkout if an unexpected lifecycle issue occurs.
+            pass
+
+        order.save()
 
 
 def create_ref_code():
@@ -242,31 +281,54 @@ class PaymentView(View):
                 messages.warning(self.request, str(e))
                 return redirect("core:order-summary")
 
-        if order.billing_address:
-            context = {
-                'order': order,
-                'DISPLAY_COUPON_FORM': False,
-                'STRIPE_PUBLIC_KEY' : settings.STRIPE_PUBLIC_KEY
-            }
-            userprofile = self.request.user.userprofile
-            if userprofile.one_click_purchasing:
-                # fetch the users card list
-                cards = stripe.Customer.list_sources(
-                    userprofile.stripe_customer_id,
-                    limit=3,
-                    object='card'
-                )
-                card_list = cards['data']
-                if len(card_list) > 0:
-                    # update the context with the default card
-                    context.update({
-                        'card': card_list[0]
-                    })
-            return render(self.request, "payment.html", context)
-        else:
-            messages.warning(
-                self.request, "You have not added a billing address")
+        if not order.billing_address:
+            messages.warning(self.request, "You have not added a billing address")
             return redirect("core:checkout")
+
+        # Create/refresh a PaymentIntent so checkout uses PaymentIntents in test mode.
+        # We do not mark the order as paid here; that happens only after confirmation.
+        amount_cents = int(order.get_total() * 100)
+        payment_intent = None
+
+        try:
+            # Idempotency prevents duplicate PaymentIntents on refresh.
+            payment_intent = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency="usd",
+                automatic_payment_methods={"enabled": True},
+                metadata={
+                    "order_id": str(order.id),
+                    "user_id": str(self.request.user.id),
+                },
+                idempotency_key=f"order_{order.id}_pi_create",
+            )
+        except Exception:
+            # Safe fallback: if PaymentIntent creation fails, we still render page and allow legacy token->Charge post.
+            payment_intent = None
+
+        context = {
+            "order": order,
+            "DISPLAY_COUPON_FORM": False,
+            "STRIPE_PUBLIC_KEY": settings.STRIPE_PUBLIC_KEY,
+            "stripe_payment_intent_client_secret": (
+                payment_intent["client_secret"] if payment_intent else ""
+            ),
+        }
+
+        userprofile = self.request.user.userprofile
+        if userprofile.one_click_purchasing:
+            # fetch the users card list
+            cards = stripe.Customer.list_sources(
+                userprofile.stripe_customer_id,
+                limit=3,
+                object="card",
+            )
+            card_list = cards["data"]
+            if len(card_list) > 0:
+                # update the context with the default card
+                context.update({"card": card_list[0]})
+
+        return render(self.request, "payment.html", context)
 
     def post(self, *args, **kwargs):
         order = Order.objects.get(user=self.request.user, ordered=False)
@@ -281,128 +343,119 @@ class PaymentView(View):
 
         form = PaymentForm(self.request.POST)
         userprofile = UserProfile.objects.get(user=self.request.user)
-        if form.is_valid():
-            token = form.cleaned_data.get('stripeToken')
-            save = form.cleaned_data.get('save')
-            use_default = form.cleaned_data.get('use_default')
+        if not form.is_valid():
+            messages.warning(self.request, "Invalid data received")
+            return redirect("/payment/stripe/")
 
-            if save:
-                if userprofile.stripe_customer_id != '' and userprofile.stripe_customer_id is not None:
-                    customer = stripe.Customer.retrieve(
-                        userprofile.stripe_customer_id)
-                    customer.sources.create(source=token)
+        payment_intent_id = self.request.POST.get("payment_intent_id")
+        save = form.cleaned_data.get("save")
+        use_default = form.cleaned_data.get("use_default")
+        token = form.cleaned_data.get("stripeToken")
 
-                else:
-                    customer = stripe.Customer.create(
-                        email=self.request.user.email,
-                    )
-                    customer.sources.create(source=token)
-                    userprofile.stripe_customer_id = customer['id']
-                    userprofile.one_click_purchasing = True
-                    userprofile.save()
-
-            amount = int(order.get_total() * 100)
-
+        # Preferred: PaymentIntents (client confirms via Stripe.js and POSTs payment_intent_id).
+        if payment_intent_id:
             try:
+                pi = stripe.PaymentIntent.retrieve(payment_intent_id)
 
-                if use_default or save:
-                    # charge the customer because we cannot charge the token more than once
-                    charge = stripe.Charge.create(
-                        amount=amount,  # cents
-                        currency="usd",
-                        customer=userprofile.stripe_customer_id
-                    )
-                else:
-                    # charge once off on the token
-                    charge = stripe.Charge.create(
-                        amount=amount,  # cents
-                        currency="usd",
-                        source=token
-                    )
+                # Require a succeeded PI before finalizing the order. If not yet succeeded,
+                # instruct user to retry (this prevents unpaid order finalization).
+                if pi["status"] != "succeeded":
+                    messages.warning(self.request, f"Payment not completed (status: {pi['status']}). Please try again.")
+                    return redirect("/payment/stripe/")
 
-                # Only after Stripe confirms payment do we reserve/decrement stock.
-                # Use a DB transaction + row locking to prevent oversell.
-                with transaction.atomic():
-                    Item.atomic_decrement_stock_for_order(order)
-
-                    # create the payment
-                    payment = Payment()
-                    payment.stripe_charge_id = charge['id']
-                    payment.user = self.request.user
-                    payment.amount = order.get_total()
-                    payment.save()
-
-                    # assign the payment to the order
-                    order_items = order.items.all()
-                    order_items.update(ordered=True)
-                    for item in order_items:
-                        item.save()
-
-                    order.ordered = True
-                    order.payment = payment
-                    order.ref_code = create_ref_code()
-
-                    # New lifecycle: mark as placed on successful payment.
-                    # Keep legacy flags synced via Order.save().
-                    try:
-                        order.transition_to(Order.OrderStatus.PLACED, actor=self.request.user)
-                    except Exception:
-                        # Defensive: do not break checkout if an unexpected lifecycle issue occurs.
-                        pass
-
-                    order.save()
+                # Finalize order (idempotent on our side: only one open cart exists per user).
+                payment = Payment.objects.create(
+                    stripe_payment_intent_id=pi["id"],
+                    stripe_payment_intent_client_secret=pi.get("client_secret"),
+                    user=self.request.user,
+                    amount=order.get_total(),
+                )
+                _finalize_order_after_successful_payment(order=order, user=self.request.user, payment=payment)
 
                 messages.success(self.request, "Your order was successful!")
                 return redirect("/")
 
             except ValueError as e:
-                # Stock issues detected at finalize time (another buyer may have taken stock)
                 messages.warning(self.request, str(e))
                 return redirect("core:order-summary")
+            except stripe.error.StripeError:
+                messages.warning(self.request, "Stripe error while validating payment. Please try again.")
+                return redirect("/payment/stripe/")
+            except Exception:
+                messages.warning(self.request, "A serious error occurred. We have been notifed.")
+                return redirect("/payment/stripe/")
 
-            except stripe.error.CardError as e:
-                body = e.json_body
-                err = body.get('error', {})
-                messages.warning(self.request, f"{err.get('message')}")
-                return redirect("/")
+        # Fallback: legacy token->Charge flow (preserves existing template behaviour).
+        if not token:
+            messages.warning(self.request, "Missing payment details. Please try again.")
+            return redirect("/payment/stripe/")
 
-            except stripe.error.RateLimitError as e:
-                # Too many requests made to the API too quickly
-                messages.warning(self.request, "Rate limit error")
-                return redirect("/")
+        if save:
+            if userprofile.stripe_customer_id != "" and userprofile.stripe_customer_id is not None:
+                customer = stripe.Customer.retrieve(userprofile.stripe_customer_id)
+                customer.sources.create(source=token)
+            else:
+                customer = stripe.Customer.create(email=self.request.user.email)
+                customer.sources.create(source=token)
+                userprofile.stripe_customer_id = customer["id"]
+                userprofile.one_click_purchasing = True
+                userprofile.save()
 
-            except stripe.error.InvalidRequestError as e:
-                # Invalid parameters were supplied to Stripe's API
-                print(e)
-                messages.warning(self.request, "Invalid parameters")
-                return redirect("/")
+        amount = int(order.get_total() * 100)
 
-            except stripe.error.AuthenticationError as e:
-                # Authentication with Stripe's API failed
-                # (maybe you changed API keys recently)
-                messages.warning(self.request, "Not authenticated")
-                return redirect("/")
+        try:
+            if use_default or save:
+                # charge the customer because we cannot charge the token more than once
+                charge = stripe.Charge.create(
+                    amount=amount,  # cents
+                    currency="usd",
+                    customer=userprofile.stripe_customer_id,
+                )
+            else:
+                # charge once off on the token
+                charge = stripe.Charge.create(
+                    amount=amount,  # cents
+                    currency="usd",
+                    source=token,
+                )
 
-            except stripe.error.APIConnectionError as e:
-                # Network communication with Stripe failed
-                messages.warning(self.request, "Network error")
-                return redirect("/")
+            payment = Payment.objects.create(
+                stripe_charge_id=charge["id"],
+                user=self.request.user,
+                amount=order.get_total(),
+            )
+            _finalize_order_after_successful_payment(order=order, user=self.request.user, payment=payment)
 
-            except stripe.error.StripeError as e:
-                # Display a very generic error to the user, and maybe send
-                # yourself an email
-                messages.warning(
-                    self.request, "Something went wrong. You were not charged. Please try again.")
-                return redirect("/")
+            messages.success(self.request, "Your order was successful!")
+            return redirect("/")
 
-            except Exception as e:
-                # send an email to ourselves
-                messages.warning(
-                    self.request, "A serious error occurred. We have been notifed.")
-                return redirect("/")
-
-        messages.warning(self.request, "Invalid data received")
-        return redirect("/payment/stripe/")
+        except ValueError as e:
+            messages.warning(self.request, str(e))
+            return redirect("core:order-summary")
+        except stripe.error.CardError as e:
+            body = e.json_body
+            err = body.get("error", {})
+            messages.warning(self.request, f"{err.get('message')}")
+            return redirect("/")
+        except stripe.error.RateLimitError:
+            messages.warning(self.request, "Rate limit error")
+            return redirect("/")
+        except stripe.error.InvalidRequestError as e:
+            print(e)
+            messages.warning(self.request, "Invalid parameters")
+            return redirect("/")
+        except stripe.error.AuthenticationError:
+            messages.warning(self.request, "Not authenticated")
+            return redirect("/")
+        except stripe.error.APIConnectionError:
+            messages.warning(self.request, "Network error")
+            return redirect("/")
+        except stripe.error.StripeError:
+            messages.warning(self.request, "Something went wrong. You were not charged. Please try again.")
+            return redirect("/")
+        except Exception:
+            messages.warning(self.request, "A serious error occurred. We have been notifed.")
+            return redirect("/")
 
 
 class HomeView(ListView):

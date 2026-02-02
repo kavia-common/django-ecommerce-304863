@@ -43,5 +43,12 @@ DATABASES = {
     }
 }
 
+# Stripe (test mode)
+# Env vars required:
+# - STRIPE_TEST_PUBLIC_KEY
+# - STRIPE_TEST_SECRET_KEY
+# Optional:
+# - STRIPE_TEST_WEBHOOK_SECRET (Stripe endpoint signing secret; if absent webhook accepts unsigned events)
 STRIPE_PUBLIC_KEY = config('STRIPE_TEST_PUBLIC_KEY')
 STRIPE_SECRET_KEY = config('STRIPE_TEST_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_TEST_WEBHOOK_SECRET', default='')

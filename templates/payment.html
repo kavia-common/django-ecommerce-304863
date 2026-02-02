@@ -142,6 +142,10 @@ button:hover {
                       </label>
                       <div id="card-element" class="StripeElement StripeElement--empty"><div class="__PrivateStripeElement" style="margin: 0px !important; padding: 0px !important; border: none !important; display: block !important; background: transparent !important; position: relative !important; opacity: 1 !important;"><iframe frameborder="0" allowtransparency="true" scrolling="no" name="__privateStripeFrame5" allowpaymentrequest="true" src="https://js.stripe.com/v3/elements-inner-card-19066928f2ed1ba3ffada645e45f5b50.html#style[base][color]=%2332325d&amp;style[base][fontFamily]=%22Helvetica+Neue%22%2C+Helvetica%2C+sans-serif&amp;style[base][fontSmoothing]=antialiased&amp;style[base][fontSize]=16px&amp;style[base][::placeholder][color]=%23aab7c4&amp;style[invalid][color]=%23fa755a&amp;style[invalid][iconColor]=%23fa755a&amp;componentName=card&amp;wait=false&amp;rtl=false&amp;keyMode=test&amp;origin=https%3A%2F%2Fstripe.com&amp;referrer=https%3A%2F%2Fstripe.com%2Fdocs%2Fstripe-js&amp;controllerId=__privateStripeController1" title="Secure payment input frame" style="border: none !important; margin: 0px !important; padding: 0px !important; width: 1px !important; min-width: 100% !important; overflow: hidden !important; display: block !important; height: 19.2px;"></iframe><input class="__PrivateStripeElement-input" aria-hidden="true" aria-label=" " autocomplete="false" maxlength="1" style="border: none !important; display: block !important; position: absolute !important; height: 1px !important; top: 0px !important; left: 0px !important; padding: 0px !important; margin: 0px !important; width: 100% !important; opacity: 0 !important; background: transparent !important; pointer-events: none !important; font-size: 16px !important;"></div></div>
                   </div>
+
+                  <!-- When available, PaymentIntent client secret enables modern SCA-ready flows. -->
+                  <input type="hidden" id="pi-client-secret" value="{{ stripe_payment_intent_client_secret|default:'' }}"/>
+
                   <div class="stripe-form-row">
                     <button id="stripeBtn">Submit Payment</button>
                   </div>
@@ -212,16 +216,42 @@ button:hover {
 
   // Handle form submission.
   var form = document.getElementById('stripe-form');
-  form.addEventListener('submit', function(event) {
+  form.addEventListener('submit', async function(event) {
     event.preventDefault();
 
+    var clientSecret = document.getElementById('pi-client-secret').value;
+
+    // Preferred: confirm PaymentIntent (SCA-ready). If secret missing, fall back to legacy token flow.
+    if (clientSecret) {
+      const result = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: card
+        }
+      });
+
+      if (result.error) {
+        var errorElement = document.getElementById('card-errors');
+        errorElement.textContent = result.error.message;
+        return;
+      }
+
+      // Send PI id to server to finalize order. (Server validates PI is succeeded.)
+      var hiddenInput = document.createElement('input');
+      hiddenInput.setAttribute('type', 'hidden');
+      hiddenInput.setAttribute('name', 'payment_intent_id');
+      hiddenInput.setAttribute('value', result.paymentIntent.id);
+      form.appendChild(hiddenInput);
+
+      form.submit();
+      return;
+    }
+
+    // Legacy fallback: tokenize and POST stripeToken (existing backend supports this).
     stripe.createToken(card).then(function(result) {
       if (result.error) {
-        // Inform the user if there was an error.
         var errorElement = document.getElementById('card-errors');
         errorElement.textContent = result.error.message;
       } else {
-        // Send the token to your server.
         stripeTokenHandler(result.token);
       }
     });
@@ -229,7 +259,6 @@ button:hover {
 
   // Submit the form with the token ID.
   function stripeTokenHandler(token) {
-    // Insert the token ID into the form so it gets submitted to the server
     var form = document.getElementById('stripe-form');
     var hiddenInput = document.createElement('input');
     hiddenInput.setAttribute('type', 'hidden');
@@ -237,7 +266,6 @@ button:hover {
     hiddenInput.setAttribute('value', token.id);
     form.appendChild(hiddenInput);
 
-    // Submit the form
     form.submit();
   }
 

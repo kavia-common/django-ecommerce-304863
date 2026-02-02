@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .stripe_webhooks import stripe_webhook
 from .views import (
     ItemDetailView,
     CheckoutView,
@@ -41,6 +42,9 @@ urlpatterns = [
          name='remove-single-item-from-cart'),
     path('payment/<payment_option>/', PaymentView.as_view(), name='payment'),
     path('request-refund/', RequestRefundView.as_view(), name='request-refund'),
+
+    # Stripe webhook (signature verified if STRIPE_WEBHOOK_SECRET is set)
+    path('stripe/webhook/', stripe_webhook, name='stripe-webhook'),
 
     # User order history (template)
     path('my/orders/', my_orders, name='my-orders'),

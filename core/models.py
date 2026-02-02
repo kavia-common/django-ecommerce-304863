@@ -491,14 +491,28 @@ class Address(models.Model):
 
 
 class Payment(models.Model):
-    stripe_charge_id = models.CharField(max_length=50)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.SET_NULL, blank=True, null=True)
+    # Legacy: kept for backward compatibility with existing charge-based flow.
+    stripe_charge_id = models.CharField(max_length=50, blank=True, null=True)
+
+    # New: PaymentIntents-based flow identifiers.
+    stripe_payment_intent_id = models.CharField(max_length=128, blank=True, null=True, db_index=True)
+    stripe_payment_intent_client_secret = models.CharField(max_length=255, blank=True, null=True)
+
+    # Webhook idempotency: store the Stripe event id we processed.
+    stripe_event_id = models.CharField(max_length=128, blank=True, null=True, unique=True)
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+    )
     amount = models.FloatField()
     timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.user.username
+        # Defensive: user can be null for webhook-created payments in edge cases.
+        return self.user.username if self.user else f"payment-{self.pk}"
 
 
 class Coupon(models.Model):
