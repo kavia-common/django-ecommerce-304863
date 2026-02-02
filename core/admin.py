@@ -106,7 +106,29 @@ class ReviewAdmin(admin.ModelAdmin):
 admin.site.register(OrderItem)
 admin.site.register(Order, OrderAdmin)
 admin.site.register(Payment)
-admin.site.register(Coupon)
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display = [
+        "code",
+        "active",
+        "discount_type",
+        "amount",
+        "fixed_amount_off",
+        "percent_off",
+        "min_order_total",
+        "max_redemptions",
+        "redemption_count",
+        "max_uses_per_user",
+        "starts_at",
+        "ends_at",
+        "updated_at",
+    ]
+    list_filter = ["active", "discount_type"]
+    search_fields = ["code"]
+    readonly_fields = ["redemption_count", "created_at", "updated_at"]
+
+
+# Keep old registration removed in favor of explicit ModelAdmin above.
 admin.site.register(Refund)
 admin.site.register(Address, AddressAdmin)
 admin.site.register(UserProfile)

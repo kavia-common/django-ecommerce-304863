@@ -58,8 +58,12 @@
         {% endfor %}
         {% if object.coupon %}
         <tr>
-            <td colspan="4"><b>Coupon</b></td>
-            <td><b>-${{ object.coupon.amount }}</b></td>
+            <td colspan="4">
+              <b>Coupon</b>
+              <span class="text-muted">({{ object.coupon.code }})</span>
+              <a class="btn btn-sm btn-outline-secondary ml-2" href="{% url 'core:remove-coupon' %}">Remove</a>
+            </td>
+            <td><b>-${{ object.get_coupon_discount }}</b></td>
         </tr>
         {% endif %}
         {% if object.get_total %}

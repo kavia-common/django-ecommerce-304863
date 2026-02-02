@@ -15,6 +15,7 @@ from .views import (
     admin_order_list,
     admin_order_transition,
     my_orders,
+    remove_coupon,
 )
 from .api_views import (
     api_admin_items,
@@ -50,6 +51,7 @@ urlpatterns = [
     path('product/<slug>/', ItemDetailView.as_view(), name='product'),
     path('add-to-cart/<slug>/', add_to_cart, name='add-to-cart'),
     path('add-coupon/', AddCouponView.as_view(), name='add-coupon'),
+    path('remove-coupon/', remove_coupon, name='remove-coupon'),
     path('remove-from-cart/<slug>/', remove_from_cart, name='remove-from-cart'),
     path('remove-item-from-cart/<slug>/', remove_single_item_from_cart,
          name='remove-single-item-from-cart'),

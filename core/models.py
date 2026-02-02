@@ -1,34 +1,47 @@
-from django.db.models.signals import post_save
+from __future__ import annotations
+
+from decimal import Decimal, ROUND_HALF_UP
+
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from django.db.models import F, Sum
+from django.db.models import F
+from django.db.models.signals import post_save
 from django.shortcuts import reverse
 from django.utils import timezone
-from django.core.validators import MinValueValidator
 from django_countries.fields import CountryField
 
-
 CATEGORY_CHOICES = (
-    ('S', 'Shirt'),
-    ('SW', 'Sport wear'),
-    ('OW', 'Outwear')
+    ("S", "Shirt"),
+    ("SW", "Sport wear"),
+    ("OW", "Outwear"),
 )
 
 LABEL_CHOICES = (
-    ('P', 'primary'),
-    ('S', 'secondary'),
-    ('D', 'danger')
+    ("P", "primary"),
+    ("S", "secondary"),
+    ("D", "danger"),
 )
 
 ADDRESS_CHOICES = (
-    ('B', 'Billing'),
-    ('S', 'Shipping'),
+    ("B", "Billing"),
+    ("S", "Shipping"),
 )
 
 
+def _to_decimal_money(value) -> Decimal:
+    """Convert value to Decimal money with 2dp, safe for floats/None."""
+    if value is None:
+        return Decimal("0.00")
+    try:
+        d = Decimal(str(value))
+    except Exception:
+        d = Decimal("0.00")
+    return d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 class UserProfile(models.Model):
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     stripe_customer_id = models.CharField(max_length=50, blank=True, null=True)
     one_click_purchasing = models.BooleanField(default=False)
 
@@ -46,6 +59,7 @@ class CategoryQuerySet(models.QuerySet):
 
 class Category(models.Model):
     """Product category suitable for merchandising and filtering."""
+
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
     active = models.BooleanField(default=True)
@@ -134,6 +148,7 @@ class Item(models.Model):
     # Using JSONField avoids adding new tables while allowing future enhancements.
     try:
         from django.db.models import JSONField  # Django 3.1+
+
         gallery = JSONField(blank=True, null=True, default=list)
     except Exception:  # pragma: no cover
         # Fallback for older Django; project appears modern enough but keep safe.
@@ -231,19 +246,28 @@ class Item(models.Model):
             )
 
     def get_absolute_url(self):
-        return reverse("core:product", kwargs={
-            'slug': self.slug
-        })
+        return reverse(
+            "core:product",
+            kwargs={
+                "slug": self.slug,
+            },
+        )
 
     def get_add_to_cart_url(self):
-        return reverse("core:add-to-cart", kwargs={
-            'slug': self.slug
-        })
+        return reverse(
+            "core:add-to-cart",
+            kwargs={
+                "slug": self.slug,
+            },
+        )
 
     def get_remove_from_cart_url(self):
-        return reverse("core:remove-from-cart", kwargs={
-            'slug': self.slug
-        })
+        return reverse(
+            "core:remove-from-cart",
+            kwargs={
+                "slug": self.slug,
+            },
+        )
 
     def get_storefront_image(self):
         """Return best-available image for storefront display (template-safe)."""
@@ -277,11 +301,7 @@ class Item(models.Model):
         from django.db.models import Count
 
         dist = {i: 0 for i in range(1, 6)}
-        rows = (
-            self.reviews.filter(is_hidden=False)
-            .values("rating")
-            .annotate(c=Count("id"))
-        )
+        rows = self.reviews.filter(is_hidden=False).values("rating").annotate(c=Count("id"))
         for r in rows:
             dist[int(r["rating"])] = int(r["c"])
         return dist
@@ -322,8 +342,7 @@ class WishlistEntry(models.Model):
 
 
 class OrderItem(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     ordered = models.BooleanField(default=False)
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     quantity = models.IntegerField(default=1)
@@ -346,6 +365,178 @@ class OrderItem(models.Model):
         return self.get_total_item_price()
 
 
+class Coupon(models.Model):
+    """Coupon/discount code.
+
+    Backward compatibility:
+      - Older data uses `amount` as a fixed discount value.
+      - New fields support fixed/percentage discounts + rules/limits.
+    """
+
+    class DiscountType(models.TextChoices):
+        FIXED = "fixed", "Fixed amount"
+        PERCENT = "percent", "Percentage"
+
+    code = models.CharField(max_length=40, unique=True, db_index=True)
+
+    # Legacy fixed discount (kept). When discount_type is FIXED and amount is set, it is used.
+    amount = models.FloatField(
+        default=0.0,
+        validators=[MinValueValidator(0.0)],
+        help_text="Legacy fixed discount amount. Still supported for backward compatibility.",
+    )
+
+    discount_type = models.CharField(
+        max_length=10,
+        choices=DiscountType.choices,
+        default=DiscountType.FIXED,
+        help_text="Fixed amount or percentage discount.",
+    )
+
+    # For percent: 0..100. For fixed: can be left null to use legacy `amount`.
+    percent_off = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Percentage off (0-100) when discount_type=percent.",
+    )
+    fixed_amount_off = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Fixed amount off when discount_type=fixed. If null, legacy `amount` is used.",
+    )
+
+    active = models.BooleanField(default=True, help_text="If false, coupon cannot be applied.")
+    starts_at = models.DateTimeField(blank=True, null=True, help_text="Coupon valid from (inclusive).")
+    ends_at = models.DateTimeField(blank=True, null=True, help_text="Coupon valid until (exclusive).")
+
+    min_order_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Minimum order subtotal required to apply coupon.",
+    )
+
+    max_redemptions = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Global maximum successful redemptions (null = unlimited).",
+    )
+    max_uses_per_user = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        help_text="Maximum successful uses per user (null = unlimited).",
+    )
+
+    redemption_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Successful uses count (maintained by system).",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["active", "starts_at", "ends_at"]),
+        ]
+        ordering = ["code"]
+
+    def __str__(self):
+        return self.code
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.discount_type == self.DiscountType.PERCENT:
+            if self.percent_off is None:
+                raise ValidationError({"percent_off": "percent_off is required for percentage coupons."})
+            if self.percent_off < 0 or self.percent_off > 100:
+                raise ValidationError({"percent_off": "percent_off must be between 0 and 100."})
+
+        if self.discount_type == self.DiscountType.FIXED:
+            # either fixed_amount_off or legacy amount must exist
+            if self.fixed_amount_off is None and (self.amount is None or float(self.amount) <= 0.0):
+                # allow 0? no: a 0 discount is useless; but legacy might have 0 in DB. Keep soft.
+                pass
+
+        if self.starts_at and self.ends_at and self.starts_at >= self.ends_at:
+            raise ValidationError({"ends_at": "ends_at must be after starts_at."})
+
+    # PUBLIC_INTERFACE
+    def is_currently_valid(self, *, now=None) -> bool:
+        """Return True if the coupon is active and within its validity window."""
+        if not self.active:
+            return False
+        now = now or timezone.now()
+        if self.starts_at and now < self.starts_at:
+            return False
+        if self.ends_at and now >= self.ends_at:
+            return False
+        return True
+
+    # PUBLIC_INTERFACE
+    def compute_discount(self, *, subtotal: Decimal) -> Decimal:
+        """Compute discount amount for a given subtotal.
+
+        Notes:
+        - discount is capped to subtotal (never negative total).
+        - subtotal should be a Decimal (2dp).
+        """
+        subtotal = _to_decimal_money(subtotal)
+
+        if subtotal <= 0:
+            return Decimal("0.00")
+
+        if self.discount_type == self.DiscountType.PERCENT:
+            pct = self.percent_off if self.percent_off is not None else Decimal("0.00")
+            discount = (subtotal * pct / Decimal("100.00")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            fixed = self.fixed_amount_off
+            if fixed is None:
+                fixed = _to_decimal_money(self.amount)
+            discount = _to_decimal_money(fixed)
+
+        if discount < 0:
+            discount = Decimal("0.00")
+        if discount > subtotal:
+            discount = subtotal
+        return discount
+
+
+class CouponRedemption(models.Model):
+    """Tracks coupon usage for enforcing per-user and global limits.
+
+    We record redemptions only for successful paid orders.
+    """
+
+    coupon = models.ForeignKey(Coupon, on_delete=models.CASCADE, related_name="redemptions")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="coupon_redemptions")
+    order = models.ForeignKey("Order", on_delete=models.CASCADE, related_name="coupon_redemption")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["coupon", "order"], name="uniq_coupon_redemption_coupon_order"),
+        ]
+        indexes = [
+            models.Index(fields=["coupon", "created_at"]),
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["coupon", "user", "created_at"]),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"redemption:{self.coupon_id}:{self.user_id}:{self.order_id}"
+
+
 class Order(models.Model):
     """Customer order.
 
@@ -359,21 +550,20 @@ class Order(models.Model):
         SHIPPED = "shipped", "Shipped"
         DELIVERED = "delivered", "Delivered"
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     ref_code = models.CharField(max_length=20, blank=True, null=True)
     items = models.ManyToManyField(OrderItem)
     start_date = models.DateTimeField(auto_now_add=True)
     ordered_date = models.DateTimeField()
     ordered = models.BooleanField(default=False)
     shipping_address = models.ForeignKey(
-        'Address', related_name='shipping_address', on_delete=models.SET_NULL, blank=True, null=True)
+        "Address", related_name="shipping_address", on_delete=models.SET_NULL, blank=True, null=True
+    )
     billing_address = models.ForeignKey(
-        'Address', related_name='billing_address', on_delete=models.SET_NULL, blank=True, null=True)
-    payment = models.ForeignKey(
-        'Payment', on_delete=models.SET_NULL, blank=True, null=True)
-    coupon = models.ForeignKey(
-        'Coupon', on_delete=models.SET_NULL, blank=True, null=True)
+        "Address", related_name="billing_address", on_delete=models.SET_NULL, blank=True, null=True
+    )
+    payment = models.ForeignKey("Payment", on_delete=models.SET_NULL, blank=True, null=True)
+    coupon = models.ForeignKey("Coupon", on_delete=models.SET_NULL, blank=True, null=True)
 
     # Legacy lifecycle fields (kept for backward compatibility with templates/data)
     being_delivered = models.BooleanField(default=False)
@@ -394,7 +584,7 @@ class Order(models.Model):
     shipped_at = models.DateTimeField(blank=True, null=True)
     delivered_at = models.DateTimeField(blank=True, null=True)
 
-    '''
+    """
     1. Item added to cart
     2. Adding a billing address
     (Failed checkout)
@@ -403,18 +593,54 @@ class Order(models.Model):
     4. Being delivered
     5. Received
     6. Refunds
-    '''
+    """
 
     def __str__(self):
         return self.user.username
 
-    def get_total(self):
-        total = 0
+    # PUBLIC_INTERFACE
+    def get_subtotal(self) -> float:
+        """Return order subtotal (before coupons) as float.
+
+        Keep float for backward compatibility with templates and Stripe integration.
+        """
+        total = Decimal("0.00")
         for order_item in self.items.all():
-            total += order_item.get_final_price()
+            total += _to_decimal_money(order_item.get_final_price())
+        return float(total)
+
+    # PUBLIC_INTERFACE
+    def get_coupon_discount(self) -> float:
+        """Return coupon discount amount applied to this order (0 if none)."""
+        subtotal = _to_decimal_money(self.get_subtotal())
+        if not self.coupon:
+            return 0.0
+        discount = self.coupon.compute_discount(subtotal=subtotal)
+        return float(discount)
+
+    def get_total(self):
+        """Return total for payment.
+
+        Backward compatibility:
+          - Existing templates call object.get_total in order_summary.html.
+          - Existing Stripe payment flow calls order.get_total().
+
+        New behavior:
+          - Supports percent/fixed coupons.
+          - Enforces min order total at application time (apply flow), but total calculation
+            is also defensive and will not apply coupon discount if subtotal < min_order_total.
+        """
+        subtotal = _to_decimal_money(self.get_subtotal())
+        total = subtotal
+
         if self.coupon:
-            total -= self.coupon.amount
-        return total
+            # Defensive: only apply discount if subtotal meets min requirement and coupon is currently valid.
+            if subtotal >= _to_decimal_money(self.coupon.min_order_total) and self.coupon.is_currently_valid():
+                total -= _to_decimal_money(self.get_coupon_discount())
+
+        if total < 0:
+            total = Decimal("0.00")
+        return float(total)
 
     # PUBLIC_INTERFACE
     def status_history(self) -> list[dict]:
@@ -526,25 +752,90 @@ class Order(models.Model):
             self.being_delivered = True
             self.received = True
 
-    def save(self, *args, **kwargs):
-        """Ensure status and timestamps remain consistent with legacy flags."""
-        # If this is a paid order and placed_at wasn't set yet, set it.
-        # (We intentionally do NOT set placed_at for carts.)
-        if self.ordered and self.placed_at is None:
-            self.placed_at = self.ordered_date or timezone.now()
+    # PUBLIC_INTERFACE
+    def validate_coupon_applicable(self, coupon: Coupon, *, user, now=None) -> None:
+        """Validate whether a coupon may be applied to this order.
 
-        # Keep legacy flags consistent with explicit status.
-        if self.status:
-            self.sync_legacy_flags_from_status()
-        else:  # pragma: no cover (status has default; defensive)
-            self.sync_status_from_legacy_flags()
+        Raises:
+            ValueError with user-safe reason if not applicable.
+        """
+        now = now or timezone.now()
 
-        super().save(*args, **kwargs)
+        if coupon is None:
+            raise ValueError("Coupon not found.")
+
+        if not coupon.is_currently_valid(now=now):
+            raise ValueError("This coupon is not active or is outside its validity window.")
+
+        subtotal = _to_decimal_money(self.get_subtotal())
+        if subtotal < _to_decimal_money(coupon.min_order_total):
+            raise ValueError(f"Order total must be at least ${coupon.min_order_total} to use this coupon.")
+
+        # Global max redemptions
+        if coupon.max_redemptions is not None and coupon.redemption_count >= int(coupon.max_redemptions):
+            raise ValueError("This coupon has reached its maximum number of redemptions.")
+
+        # Per-user usage limits: count successful redemptions
+        if coupon.max_uses_per_user is not None:
+            used = CouponRedemption.objects.filter(coupon=coupon, user=user).count()
+            if used >= int(coupon.max_uses_per_user):
+                raise ValueError("You have reached the usage limit for this coupon.")
+
+    # PUBLIC_INTERFACE
+    def apply_coupon(self, coupon: Coupon, *, user) -> None:
+        """Apply a coupon to this order after validation.
+
+        This does not increment redemption counts; that occurs only upon successful payment.
+        """
+        self.validate_coupon_applicable(coupon, user=user)
+        self.coupon = coupon
+
+    # PUBLIC_INTERFACE
+    def remove_coupon(self) -> None:
+        """Remove coupon from order (idempotent)."""
+        self.coupon = None
+
+    # PUBLIC_INTERFACE
+    def record_coupon_redemption_if_needed(self) -> None:
+        """Record coupon redemption for paid order and update counters.
+
+        This should be called once, after the order is successfully paid/marked ordered=True.
+        It is safe to call multiple times; it is idempotent per-order via unique constraint.
+        """
+        if not self.ordered or not self.coupon:
+            return
+
+        # Ensure we never record redemption for a coupon that wasn't actually valid/applicable.
+        coupon = self.coupon
+        if not coupon.is_currently_valid():
+            return
+        subtotal = _to_decimal_money(self.get_subtotal())
+        if subtotal < _to_decimal_money(coupon.min_order_total):
+            return
+
+        with transaction.atomic():
+            # lock coupon for consistent counter checks/updates
+            coupon_locked = Coupon.objects.select_for_update().get(pk=coupon.pk)
+
+            # Double-check global limits under lock
+            if coupon_locked.max_redemptions is not None and coupon_locked.redemption_count >= int(coupon_locked.max_redemptions):
+                return
+
+            # Create redemption (idempotent)
+            redemption, created = CouponRedemption.objects.get_or_create(
+                coupon=coupon_locked,
+                order=self,
+                defaults={"user": self.user},
+            )
+            if created:
+                Coupon.objects.filter(pk=coupon_locked.pk).update(
+                    redemption_count=F("redemption_count") + 1,
+                    updated_at=timezone.now(),
+                )
 
 
 class Address(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     street_address = models.CharField(max_length=100)
     apartment_address = models.CharField(max_length=100)
     country = CountryField(multiple=False)
@@ -556,7 +847,7 @@ class Address(models.Model):
         return self.user.username
 
     class Meta:
-        verbose_name_plural = 'Addresses'
+        verbose_name_plural = "Addresses"
 
 
 class Payment(models.Model):
@@ -582,14 +873,6 @@ class Payment(models.Model):
     def __str__(self):
         # Defensive: user can be null for webhook-created payments in edge cases.
         return self.user.username if self.user else f"payment-{self.pk}"
-
-
-class Coupon(models.Model):
-    code = models.CharField(max_length=15)
-    amount = models.FloatField()
-
-    def __str__(self):
-        return self.code
 
 
 class Refund(models.Model):
@@ -685,7 +968,7 @@ def user_has_purchased_item(user, item: Item) -> bool:
 
 def userprofile_receiver(sender, instance, created, *args, **kwargs):
     if created:
-        userprofile = UserProfile.objects.create(user=instance)
+        UserProfile.objects.create(user=instance)
 
 
 post_save.connect(userprofile_receiver, sender=settings.AUTH_USER_MODEL)
