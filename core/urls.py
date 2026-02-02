@@ -31,6 +31,13 @@ from .api_wishlist import (
     api_wishlist_list,
     api_wishlist_remove,
 )
+from .api_reviews import (
+    api_reviews_for_item,
+    api_upsert_my_review,
+    api_delete_my_review,
+    api_admin_hide_review,
+    api_admin_unhide_review,
+)
 from .wishlist_views import wishlist_list, wishlist_toggle
 
 app_name = 'core'
@@ -71,6 +78,13 @@ urlpatterns = [
     path('api/wishlist/', api_wishlist_list, name='api-wishlist-list'),
     path('api/wishlist/add/', api_wishlist_add, name='api-wishlist-add'),
     path('api/wishlist/remove/', api_wishlist_remove, name='api-wishlist-remove'),
+
+    # API: reviews (public list + authenticated manage own + admin moderation)
+    path('api/reviews/items/<int:item_id>/', api_reviews_for_item, name='api-reviews-for-item'),
+    path('api/reviews/items/<int:item_id>/me/', api_upsert_my_review, name='api-upsert-my-review'),
+    path('api/reviews/items/<int:item_id>/me/delete/', api_delete_my_review, name='api-delete-my-review'),
+    path('api/reviews/<int:review_id>/hide/', api_admin_hide_review, name='api-admin-hide-review'),
+    path('api/reviews/<int:review_id>/unhide/', api_admin_unhide_review, name='api-admin-unhide-review'),
 
     # API: admin (JWT + admin role)
     path('api/admin/items/', api_admin_items, name='api-admin-items'),

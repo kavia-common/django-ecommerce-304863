@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Item, OrderItem, Order, Payment, Coupon, Refund, Address, UserProfile, Category, WishlistEntry
+from .models import Item, OrderItem, Order, Payment, Coupon, Refund, Address, UserProfile, Category, WishlistEntry, Review
 
 
 def make_refund_accepted(modeladmin, request, queryset):
@@ -81,6 +81,26 @@ class ItemAdmin(admin.ModelAdmin):
     search_fields = ["title", "sku", "slug", "description"]
     prepopulated_fields = {"slug": ("title",)}
     readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.action(description="Hide selected reviews")
+def hide_reviews(modeladmin, request, queryset):
+    queryset.update(is_hidden=True)
+
+
+@admin.action(description="Unhide selected reviews")
+def unhide_reviews(modeladmin, request, queryset):
+    queryset.update(is_hidden=False)
+
+
+@admin.register(Review)
+class ReviewAdmin(admin.ModelAdmin):
+    list_display = ["id", "item", "user", "rating", "is_hidden", "created_at", "updated_at"]
+    list_filter = ["is_hidden", "rating", "created_at"]
+    search_fields = ["item__title", "item__sku", "user__username", "user__email", "title", "body"]
+    autocomplete_fields = ["item", "user"]
+    readonly_fields = ["created_at", "updated_at"]
+    actions = [hide_reviews, unhide_reviews]
 
 
 admin.site.register(OrderItem)

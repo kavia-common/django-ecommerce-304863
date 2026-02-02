@@ -36,6 +36,24 @@
               </a>
             </div>
 
+            <h2 class="h4 mb-2">{{ object.title }}</h2>
+
+            <div class="d-flex align-items-center mb-3">
+              <div class="mr-2">
+                {% for i in "12345" %}
+                  {% if average_rating|default:0 >= forloop.counter %}
+                    <span style="color:#f5c518;">&#9733;</span>
+                  {% else %}
+                    <span style="color:#ddd;">&#9733;</span>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <small class="text-muted">
+                {{ average_rating|default:0|floatformat:1 }} / 5
+                ({{ reviews_count|default:0 }} review{{ reviews_count|default:0|pluralize }})
+              </small>
+            </div>
+
             <p class="lead">
               {% if object.discount_price %}
               <span class="mr-1">
@@ -51,15 +69,6 @@
 
             <p>{{ object.description }}</p>
 
-            {% comment %} <form class="d-flex justify-content-left">
-              <!-- Default input -->
-              <input type="number" value="1" aria-label="Search" class="form-control" style="width: 100px">
-              <button class="btn btn-primary btn-md my-0 p" type="submit">
-                Add to cart
-                <i class="fas fa-shopping-cart ml-1"></i>
-              </button>
-
-            </form> {% endcomment %}
             {% if object.track_inventory %}
               <p class="text-muted mb-2">Stock: {{ object.stock_quantity }}</p>
             {% endif %}
@@ -100,6 +109,143 @@
 
       </div>
       <!--Grid row-->
+
+      <hr>
+
+      <!-- Reviews section -->
+      <div class="row wow fadeIn">
+        <div class="col-md-8">
+          <h4 class="my-4 h4">Customer reviews</h4>
+
+          {% if reviews_count|default:0 == 0 %}
+            <p class="text-muted">No reviews yet.</p>
+          {% endif %}
+
+          {% if reviews %}
+            {% for r in reviews %}
+              <div class="card mb-3">
+                <div class="card-body">
+                  <div class="d-flex justify-content-between">
+                    <div>
+                      <strong>{{ r.user.username }}</strong>
+                      <small class="text-muted ml-2">{{ r.created_at|date:"M d, Y" }}</small>
+                    </div>
+                    <div>
+                      {% for i in "12345" %}
+                        {% if r.rating >= forloop.counter %}
+                          <span style="color:#f5c518;">&#9733;</span>
+                        {% else %}
+                          <span style="color:#ddd;">&#9733;</span>
+                        {% endif %}
+                      {% endfor %}
+                    </div>
+                  </div>
+
+                  {% if r.title %}
+                    <p class="font-weight-bold mb-1 mt-2">{{ r.title }}</p>
+                  {% endif %}
+                  <p class="mb-0">{{ r.body }}</p>
+                </div>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        <div class="col-md-4">
+          <h5 class="my-4">Rating breakdown</h5>
+
+          {% for star in "54321" %}
+            {% with s=star|add:"0" %}
+              <div class="d-flex align-items-center mb-2">
+                <div style="width:55px;">
+                  <small>{{ star }} star</small>
+                </div>
+                <div class="progress flex-grow-1 mr-2" style="height:10px;">
+                  {% if reviews_count|default:0 > 0 %}
+                    {% with val=rating_distribution.s %}
+                      <div class="progress-bar" role="progressbar"
+                           style="width: {% widthratio rating_distribution.s reviews_count 100 %}%;">
+                      </div>
+                    {% endwith %}
+                  {% else %}
+                    <div class="progress-bar" role="progressbar" style="width: 0%;"></div>
+                  {% endif %}
+                </div>
+                <small class="text-muted">
+                  {% if rating_distribution %}
+                    {{ rating_distribution.s|default:0 }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </small>
+              </div>
+            {% endwith %}
+          {% endfor %}
+
+          <hr>
+
+          <h5 class="my-3">Your review</h5>
+
+          {% if not request.user.is_authenticated %}
+            <p class="text-muted mb-2">Log in to leave a review.</p>
+            <a class="btn btn-outline-primary btn-sm" href="{% url 'account_login' %}?next={{ request.path }}">Login</a>
+          {% else %}
+            {% if can_review %}
+              <form method="post" class="mb-3">
+                {% csrf_token %}
+
+                {% if review_form.non_field_errors %}
+                  <div class="alert alert-danger">{{ review_form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="form-group">
+                  <label>{{ review_form.rating.label }}</label>
+                  {{ review_form.rating }}
+                  {% if review_form.rating.errors %}
+                    <div class="text-danger small">{{ review_form.rating.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="form-group">
+                  <label>{{ review_form.title.label }}</label>
+                  {{ review_form.title }}
+                  {% if review_form.title.errors %}
+                    <div class="text-danger small">{{ review_form.title.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="form-group">
+                  <label>{{ review_form.body.label }}</label>
+                  {{ review_form.body }}
+                  {% if review_form.body.errors %}
+                    <div class="text-danger small">{{ review_form.body.errors }}</div>
+                  {% endif %}
+                </div>
+
+                <input type="hidden" name="review_action" value="save">
+
+                <button type="submit" class="btn btn-primary btn-sm">
+                  {% if user_review %}Update review{% else %}Submit review{% endif %}
+                </button>
+
+                {% if user_review %}
+                  <button type="submit" class="btn btn-outline-danger btn-sm"
+                          name="review_action" value="delete"
+                          onclick="return confirm('Delete your review?');">
+                    Delete
+                  </button>
+                {% endif %}
+              </form>
+              <small class="text-muted">One review per customer per item.</small>
+            {% else %}
+              <p class="text-muted">
+                Only customers who purchased this item can leave a review.
+              </p>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <!-- /Reviews section -->
 
       <hr>
 

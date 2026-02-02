@@ -251,6 +251,41 @@ class Item(models.Model):
             return self.primary_image
         return self.image
 
+    # PUBLIC_INTERFACE
+    def average_rating(self) -> float:
+        """Return average rating for this item (visible reviews only).
+
+        Returns:
+            float: average rating (0.0 if no ratings).
+        """
+        agg = self.reviews.filter(is_hidden=False).aggregate(avg=models.Avg("rating"))
+        val = agg.get("avg")
+        return float(val) if val is not None else 0.0
+
+    # PUBLIC_INTERFACE
+    def reviews_count(self) -> int:
+        """Return count of visible reviews for this item."""
+        return int(self.reviews.filter(is_hidden=False).count())
+
+    # PUBLIC_INTERFACE
+    def rating_distribution(self) -> dict:
+        """Return rating distribution for visible reviews.
+
+        Returns:
+            dict: keys 1..5 -> count
+        """
+        from django.db.models import Count
+
+        dist = {i: 0 for i in range(1, 6)}
+        rows = (
+            self.reviews.filter(is_hidden=False)
+            .values("rating")
+            .annotate(c=Count("id"))
+        )
+        for r in rows:
+            dist[int(r["rating"])] = int(r["c"])
+        return dist
+
 
 class WishlistEntry(models.Model):
     """Wishlist entry connecting a user to an Item.
@@ -565,6 +600,87 @@ class Refund(models.Model):
 
     def __str__(self):
         return f"{self.pk}"
+
+
+class Review(models.Model):
+    """Product review created by a user for an item."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="reviews",
+    )
+
+    rating = models.PositiveSmallIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text="Rating from 1 to 5.",
+    )
+    title = models.CharField(max_length=200, blank=True, null=True)
+    body = models.TextField(help_text="Review text.")
+
+    is_hidden = models.BooleanField(
+        default=False,
+        help_text="If true, this review is hidden from public display (moderation).",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "item"], name="uniq_review_user_item"),
+        ]
+        indexes = [
+            models.Index(fields=["item", "created_at"]),
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["item", "is_hidden", "created_at"]),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"review:{self.item_id}:{self.user_id}:{self.rating}"
+
+    def clean(self):
+        # rating is PositiveSmallInteger; enforce upper bound here for friendly error surfaces
+        from django.core.exceptions import ValidationError
+
+        if self.rating is None:
+            raise ValidationError({"rating": "Please select a rating from 1 to 5."})
+        if int(self.rating) < 1 or int(self.rating) > 5:
+            raise ValidationError({"rating": "Rating must be between 1 and 5."})
+
+
+# PUBLIC_INTERFACE
+def user_has_purchased_item(user, item: Item) -> bool:
+    """Return whether user has purchased the given item.
+
+    Detectability policy:
+    - We consider a purchase if there exists an Order where ordered=True (paid)
+      and one of its OrderItems references the item.
+
+    This helper is used to gate review creation (purchaser-only) where possible.
+
+    Args:
+        user: Django auth user
+        item: Item instance
+
+    Returns:
+        bool: True if user has at least one paid order containing the item.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+
+    # Uses existing schema: Order.items is a M2M to OrderItem which contains item FK.
+    return Order.objects.filter(
+        user=user,
+        ordered=True,
+        items__item_id=item.id,
+    ).exists()
 
 
 def userprofile_receiver(sender, instance, created, *args, **kwargs):

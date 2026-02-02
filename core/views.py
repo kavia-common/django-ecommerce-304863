@@ -21,7 +21,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .forms import CheckoutForm, CouponForm, RefundForm, PaymentForm
-from .models import Item, OrderItem, Order, Address, Payment, Coupon, Refund, UserProfile
+from .review_forms import ReviewForm
+from .models import Item, OrderItem, Order, Address, Payment, Coupon, Refund, UserProfile, Review, user_has_purchased_item
 from .rbac import request_is_admin
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -485,6 +486,102 @@ class ItemDetailView(DetailView):
         # Only allow active items to be viewed on the public storefront.
         # Inactive items remain accessible to admins via admin/API using Item.all_objects.
         return Item.objects.all()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        item = context["object"]
+
+        visible_reviews = (
+            item.reviews.filter(is_hidden=False)
+            .select_related("user")
+            .order_by("-created_at", "-id")
+        )
+
+        avg = item.average_rating()
+        cnt = item.reviews_count()
+        dist = item.rating_distribution()
+
+        user_review = None
+        can_review = False
+        review_form = None
+
+        if self.request.user.is_authenticated:
+            user_review = Review.objects.filter(user=self.request.user, item=item).first()
+            can_review = user_has_purchased_item(self.request.user, item)
+            initial = {}
+            if user_review:
+                initial = {
+                    "rating": user_review.rating,
+                    "title": user_review.title or "",
+                    "body": user_review.body or "",
+                }
+            review_form = ReviewForm(initial=initial)
+
+        context.update(
+            {
+                "reviews": visible_reviews[:20],
+                "average_rating": avg,
+                "reviews_count": cnt,
+                "rating_distribution": dist,
+                "user_review": user_review,
+                "can_review": can_review,
+                "review_form": review_form,
+            }
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle create/update/delete of user's review from product page."""
+        self.object = self.get_object()
+        item = self.object
+
+        if not request.user.is_authenticated:
+            messages.warning(request, "Please log in to leave a review.")
+            return redirect("account_login")
+
+        action = (request.POST.get("review_action") or "save").lower()
+
+        if action == "delete":
+            review = Review.objects.filter(user=request.user, item=item).first()
+            if not review:
+                messages.info(request, "You do not have a review to delete.")
+                return redirect("core:product", slug=item.slug)
+            review.delete()
+            messages.success(request, "Your review was deleted.")
+            return redirect("core:product", slug=item.slug)
+
+        # save/update
+        if not user_has_purchased_item(request.user, item):
+            messages.warning(request, "Only customers who purchased this item can leave a review.")
+            return redirect("core:product", slug=item.slug)
+
+        review = Review.objects.filter(user=request.user, item=item).first()
+        form = ReviewForm(request.POST)
+        if not form.is_valid():
+            # Re-render the page with validation messages
+            ctx = self.get_context_data()
+            ctx["review_form"] = form
+            messages.warning(request, "Please fix the errors in your review form.")
+            return render(request, "product.html", ctx)
+
+        rating = int(form.cleaned_data["rating"])
+        title = (form.cleaned_data.get("title") or "").strip()
+        body = form.cleaned_data["body"]
+
+        try:
+            if review is None:
+                review = Review(user=request.user, item=item)
+            review.rating = rating
+            review.title = title
+            review.body = body
+            review.full_clean()
+            review.save()
+        except Exception as e:
+            messages.warning(request, str(e))
+            return redirect("core:product", slug=item.slug)
+
+        messages.success(request, "Thanks! Your review has been saved.")
+        return redirect("core:product", slug=item.slug)
 
 
 @login_required
